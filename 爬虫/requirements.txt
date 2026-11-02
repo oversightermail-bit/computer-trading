@@ -1,0 +1,15 @@
+# 硬件价格比价网站 · 数据采集子系统依赖
+# 安装：pip install -r requirements.txt
+#
+# 核心（文档 §四：Scrapy 并发调度 + requests 轻量页面 + pandas 清洗 + APScheduler 定时）
+scrapy>=2.11
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=4.9
+pandas>=2.0
+PyMySQL>=1.1
+APScheduler>=3.10,<4
+
+# 说明：
+#  - lxml/pandas/PyMySQL 缺失时系统自动降级（SQL 脚本输出），但完整功能需要全部安装；
+#  - Scrapy 缺失时自动改用内置直抓引擎（requests/urllib），功能等价。

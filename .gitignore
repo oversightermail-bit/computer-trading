@@ -1,0 +1,16 @@
+# IDE 配置
+.idea/
+
+# 临时/恢复目录
+acl-recovery/
+
+# 构建产物
+后端/target/
+后端/*.jar
+
+# 运行日志
+爬虫/logs/
+*.log
+
+# Word 文档
+*.docx
