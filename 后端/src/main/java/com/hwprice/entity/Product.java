@@ -24,4 +24,7 @@ public class Product {
 
     /** 规格，如 12GB / DDR5 6000 / 1TB */
     private String spec;
+
+    /** 性能分 1-100（人工维护，用于高性价比推荐：性价比指数 = 性能分 ÷ 价格） */
+    private Integer perfScore;
 }

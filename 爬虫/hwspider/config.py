@@ -3,7 +3,8 @@
 爬虫子模块统一配置中心（运营可配，改完重启调度即生效）
 
 依据《硬件比价网站_代码实现功能描述文档》第四章：
-  - 采集目标：京东 / 天猫 / 淘宝 三大平台，覆盖 10 个硬件类目；
+  - 采集目标：中关村在线（ZOL）参考报价，覆盖 10 个硬件类目
+    （京东 / 天猫 / 淘宝三平台采集器保留备用，见 README 数据源变更说明）；
   - 反爬策略：UA 轮换、代理池、请求限速、失败重试、封禁信号检测；
   - 清洗口径：价格标准化 + 按 SKU（品牌|型号|规格）聚合取中位价；
   - 调度：每日多次定时抓取，保证价格时序连续；
@@ -12,7 +13,7 @@
 与后端契约（见 后端/sql/schema.sql 与 README）：
   - t_product：商品/型号主数据，爬虫按 (hardware_type, brand, model, spec) 幂等 upsert；
   - t_price_history：价格时序，爬虫写入、后端只读聚合，一行 = 商品 × 平台 × 日期；
-  - 平台名称与 init_data.sql 一致：京东 / 天猫 / 淘宝；
+  - 平台名称与 init_data.sql 一致：中关村在线；
   - hardware_type 编码与 t_hardware.type 一致。
 """
 from pathlib import Path
@@ -33,18 +34,35 @@ DATABASE = {
 }
 
 # ---------------- 采集平台（顺序即抓取顺序） ----------------
-PLATFORMS = ["京东", "天猫", "淘宝"]
+# 2026-11 起主数据源改为中关村在线 ZOL（京东/天猫/淘宝真实抓取已被反爬封死，见 README）
+PLATFORMS = ["中关村在线"]
 
 # 各平台相对基准价系数（与后端演示数据口径一致，用于模拟行情与校验）
-PLATFORM_FACTOR = {"京东": 1.00, "天猫": 0.985, "淘宝": 0.97}
+PLATFORM_FACTOR = {"京东": 1.00, "天猫": 0.985, "淘宝": 0.97, "中关村在线": 0.99}
+
+# ---------------- ZOL 采集配置 ----------------
+# 每个硬件类目 → 中关村在线分类列表页（单页全量、不分页）。
+# 类目页被防刷拦截时可从对应品牌/子类页换用（结构相同：indexXXXX.shtml 条目）。
+ZOL_CATEGORIES = {
+    "cpu": "https://detail.zol.com.cn/cpu/",
+    "gpu": "https://detail.zol.com.cn/vga/",
+    "mem_desktop": "https://detail.zol.com.cn/memory/",
+    "mem_laptop": "https://detail.zol.com.cn/memory/",
+    "ssd": "https://detail.zol.com.cn/solid_state_drive/",
+    "ssd_usb": "https://detail.zol.com.cn/move_disk/",       # 移动固态在"移动硬盘"类目
+    "hdd_usb": "https://detail.zol.com.cn/move_disk/",
+    "monitor": "https://detail.zol.com.cn/lcd/",
+    "keyboard": "https://detail.zol.com.cn/keyboard/",
+    "mouse": "https://detail.zol.com.cn/mice/",
+}
 
 # ---------------- 反爬参数 ----------------
 ANTI_CRAWL = {
-    "download_delay": 2.0,          # 请求限速（秒）
-    "concurrent_requests": 4,       # 并发数
+    "download_delay": 3.0,          # 请求限速（秒）；ZOL 有防刷限流，勿低于 2
+    "concurrent_requests": 1,       # 并发数（ZOL 防刷，单并发）
     "retry_times": 3,               # 失败重试次数
-    "timeout": 10,                  # 单请求超时（秒）
-    "page_size": 1,                 # 每个关键词最多翻页数（演示环境别抓太狠）
+    "timeout": 15,                  # 单请求超时（秒）
+    "page_size": 1,                 # 每个关键词最多翻页数（ZOL 分类页不分页，未使用）
     # UA 池轮换（可用真实浏览器 UA 扩充）
     "user_agents": [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -60,6 +78,9 @@ ANTI_CRAWL = {
     "ban_markers": [
         "验证码", "captcha", "安全验证", "风险控制", "异常访问",
         "登录后", "请登录", "login.taobao.com", "passport.jd.com",
+        "京东验证", "cfe.m.jd.com", "risk_handler",
+        "当前人数过多", "请前往京东APP",
+        "防刷验证", "service.zol.com.cn", "checking",   # ZOL 防刷页
     ],
     # 每平台请求上限（超出视为异常，保护目标站点也保护自己）
     "max_requests_per_platform": 60,

@@ -188,7 +188,7 @@ def main() -> None:
 def _add_common(p) -> None:
     p.add_argument("--mode", choices=["auto", "real", "mock"], default="auto",
                    help="auto=真实抓取+封禁自动切换模拟行情（默认）")
-    p.add_argument("--platforms", help="平台列表，逗号分隔，如 京东,天猫")
+    p.add_argument("--platforms", help="平台列表，逗号分隔，如 中关村在线")
     p.add_argument("--types", help="硬件类型编码，逗号分隔，如 cpu,gpu")
     p.add_argument("--sink", choices=["mysql", "sql", "jsonl"], default="mysql")
     p.add_argument("--out", type=Path, help="sink=sql/jsonl 时的输出文件")

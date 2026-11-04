@@ -9,7 +9,8 @@ import java.util.List;
 
 /**
  * 价格时序视图（ECharts 折线图数据源）：
- * dates 为横轴日期，series 为多条折线（图例可显隐），recommend 为各型号推荐购买平台。
+ * dates 为横轴日期，series 为多条折线（图例可显隐），recommend 为各型号高性价比推荐
+ * （参考价 + 性能分 + 性价比指数）。
  */
 @Data
 public class PriceSeriesVO {
@@ -26,7 +27,7 @@ public class PriceSeriesVO {
     /** 折线序列：每个型号一条（多平台取当日中位价） */
     private List<Series> series;
 
-    /** 推荐购买平台：每型号取当日最低价平台 */
+    /** 高性价比推荐：每型号参考价 + 性能分 + 性价比指数（前端按指数降序展示） */
     private List<Recommend> recommend;
 
     @Data
@@ -48,15 +49,11 @@ public class PriceSeriesVO {
         private String model;
         /** 规格 */
         private String spec;
-        /** 推荐平台（当日最低价） */
-        private String platform;
-        /** 推荐平台价格 */
+        /** 今日参考价（数据源：中关村在线参考报价） */
         private BigDecimal price;
-        /** 次低价平台 */
-        private String secondPlatform;
-        /** 次低价 */
-        private BigDecimal secondPrice;
-        /** 与次低价差额 */
-        private BigDecimal diff;
+        /** 性能分 1-100（人工维护，用于高性价比推荐） */
+        private Integer perf;
+        /** 性价比指数 = 性能分 ÷ 参考价 × 1000，越大越划算（perf=0 时为 null） */
+        private BigDecimal valueIndex;
     }
 }

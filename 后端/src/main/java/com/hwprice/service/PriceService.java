@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * 价格服务：价格时序聚合（ECharts 折线数据源）、推荐购买平台、搜索、硬件文案。
+ * 价格服务：价格时序聚合（ECharts 折线数据源）、高性价比推荐、搜索、硬件文案。
  * 热点价格走 Redis 缓存（Redis 不可用时自动直查数据库）。
  */
 @Slf4j
@@ -101,7 +101,7 @@ public class PriceService {
 
     /**
      * 价格时序（F3 折线图数据源）：
-     * 每个型号一条折线（多平台取当日中位价），并给出每型号当日最低价推荐平台。
+     * 每个型号一条折线（当日参考价），并给出每型号的性能分与性价比指数。
      */
     public PriceSeriesVO series(String type) {
         Hardware h = hardware(type);
@@ -171,11 +171,11 @@ public class PriceService {
         return vo;
     }
 
-    /** 每型号当日最低价推荐平台 */
+    /** 每型号当日参考价 + 性能分 → 高性价比指数（前端按指数降序展示推荐） */
     private PriceSeriesVO.Recommend buildRecommend(PriceRow first, List<PriceRow> group) {
         // 该型号最新采集日期
         LocalDate latest = group.stream().map(PriceRow::getDate).max(Comparator.naturalOrder()).orElse(null);
-        // 最新日期上各平台最低价
+        // 最新日期上各来源最低价（数据源为单平台时即该平台参考价）
         Map<String, BigDecimal> platformMin = new LinkedHashMap<>();
         for (PriceRow row : group) {
             if (row.getDate().equals(latest)) {
@@ -189,23 +189,24 @@ public class PriceService {
         r.setBrand(first.getBrand());
         r.setModel(first.getModel());
         r.setSpec(first.getSpec());
+        r.setPerf(first.getPerfScore());
         if (!sorted.isEmpty()) {
             Map.Entry<String, BigDecimal> best = sorted.get(0);
-            r.setPlatform(best.getKey());
             r.setPrice(best.getValue());
-            if (sorted.size() > 1) {
-                Map.Entry<String, BigDecimal> second = sorted.get(1);
-                r.setSecondPlatform(second.getKey());
-                r.setSecondPrice(second.getValue());
-                r.setDiff(second.getValue().subtract(best.getValue()));
-            }
+        }
+        // 性价比指数 = 性能分 ÷ 参考价 × 1000（perf 未维护时为 null，前端不参与排序）
+        if (first.getPerfScore() != null && first.getPerfScore() > 0 && r.getPrice() != null
+                && r.getPrice().compareTo(BigDecimal.ZERO) > 0) {
+            r.setValueIndex(BigDecimal.valueOf(first.getPerfScore())
+                    .multiply(BigDecimal.valueOf(1000))
+                    .divide(r.getPrice(), 2, RoundingMode.HALF_UP));
         }
         return r;
     }
 
     /**
      * AI 实时价格注入：近 3 日各硬件类型最低价 TOP3，拼接成提示词上下文。
-     * 例：CPU: i5-13490F(京东 ¥1299) | R5 5600(天猫 ¥729)；GPU: RTX 4060(京东 ¥2399) ...
+     * 例：CPU: i5-13490F(中关村在线 ¥1299) | R5 5600(中关村在线 ¥729)；GPU: RTX 4060(中关村在线 ¥2399) ...
      */
     public String recommendOverview() {
         OverviewCacheEntry entry = overviewCache.get("all");

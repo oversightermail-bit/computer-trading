@@ -20,7 +20,7 @@ public class PriceHistory {
 
     private Long productId;
 
-    /** 平台：淘宝 / 京东 / 天猫 等 */
+    /** 数据源：中关村在线（ZOL）等 */
     private String platform;
 
     private BigDecimal price;

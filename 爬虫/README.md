@@ -1,10 +1,16 @@
 # 硬件价格比价与智能推荐网站 · 数据采集子系统（Python 爬虫）
 
 依据《硬件比价网站_代码实现功能描述文档》第四章与《网站设计》需求实现的爬虫子模块（F6）：
-从 **京东 / 天猫 / 淘宝** 抓取 10 类硬件的多平台价格，清洗标准化后写入 MySQL
+从 **中关村在线（ZOL）** 抓取 10 类硬件的参考报价，清洗标准化后写入 MySQL
 `t_price_history` 时序表，由后端聚合为折线图与"推荐购买平台"。
 
-技术栈：**Scrapy（并发调度，可降级直抓）+ requests/urllib（轻量页面）+ lxml/正则（解析）+
+> **数据源变更（2026-11）**：原定京东 / 天猫 / 淘宝三平台真实抓取在 2026 年已被
+> 反爬全面封死（实测：京东风控页、淘宝 SPA 空壳、天猫 302 到淘宝），已改为抓取
+> 中关村在线（ZOL）参考报价——无需登录、无验证码、结构稳定，且覆盖全部 10 个
+> 硬件类目。旧三平台 Spider（jd/taobao/tmall.py）保留备用；如需恢复多平台真实价，
+> 见 `真实抓取改进建议.md` 的京东联盟 API / Playwright 路线。
+
+技术栈：**requests（轻量页面，含限速/重试/UA 轮换）+ lxml（解析）+
 pandas（清洗归一）+ PyMySQL（入库）+ APScheduler（定时）**。
 
 ---
@@ -37,9 +43,10 @@ pandas（清洗归一）+ PyMySQL（入库）+ APScheduler（定时）**。
     ├── pipelines.py            # Scrapy 清洗入库管道（复用 engine.ingest）
     └── spiders/                # 每平台一个 Spider（含无 Scrapy 时的直抓函数）
         ├── base.py             # 公共基类与注册表
-        ├── jd.py               # 京东：搜索列表 + p.3.cn 价格接口补价
-        ├── taobao.py           # 淘宝：内嵌 JSON（g_page_config）解析
-        └── tmall.py            # 天猫：CSS 选择器解析
+        ├── zol.py              # 中关村在线：分类页定位型号 → 详情页取参考报价（当前主源）
+        ├── jd.py               # 京东（备用，2026 起需登录 Cookie，见改进建议）
+        ├── taobao.py           # 淘宝（备用，页面已 SPA 化，需 mtop 接口或浏览器渲染）
+        └── tmall.py            # 天猫（备用，同淘宝）
 ```
 
 ## 二、快速开始
@@ -73,7 +80,7 @@ python run.py schedule
 | `real` | 只走真实抓取，失败不降级 | 验证真实反爬策略 |
 | `mock` | 直接使用模拟行情（固定种子随机游走，确定可复现） | 无网演示、回填历史 |
 
-模拟行情与后端演示数据同思路（固定种子随机游走、平台价差系数 京东1.00/天猫0.985/淘宝0.97、
+模拟行情与后端演示数据同思路（固定种子随机游走、中关村在线系数 0.99、
 小概率促销），同一天多次运行结果完全一致，不会产生自相矛盾的历史数据。
 
 ## 四、与后端的契约
@@ -81,22 +88,23 @@ python run.py schedule
 - 写入两张表：`t_product`（按 硬件类型+品牌+型号+规格 幂等 upsert，自动复用后端
   init_data.sql 已有的 id 1-45）与 `t_price_history`（商品 × 平台 × 日期一行，
   同日重跑刷新价格，绝不产生重复行）。
-- 平台名与后端一致：**京东 / 天猫 / 淘宝**；硬件类型编码与 `t_hardware.type` 一致
+- 平台名与后端一致：**中关村在线**；硬件类型编码与 `t_hardware.type` 一致
   （cpu/gpu/mem_desktop/mem_laptop/ssd/ssd_usb/hdd_usb/monitor/keyboard/mouse）。
 - 后端 `/api/public/price/series` 直接聚合 `t_price_history` 出折线 +
-  推荐购买平台；爬虫侧 `logs/recommend_YYYY-MM-DD.txt` 输出同口径报告供核对。
+  高性价比推荐（性能分 `t_product.perf_score` ÷ 参考价 × 1000 = 性价比指数）；
+  爬虫侧 `logs/recommend_YYYY-MM-DD.txt` 输出当日各型号参考价清单供采集核对。
 - 二手交易（F5）本期不开发，爬虫不涉及 `t_trade`。
 
 ## 五、扩展指南（配置化扩展，无需改代码）
 
 1. **新增硬件类目 / 型号**：在 `hwspider/config.py` 的 `CATALOG` 追加
-   `{"type": ..., "brand": ..., "model": ..., "spec": ..., "base": ...}`，
-   Spider 自动生成该类型的搜索关键词。
+   `{"type": ..., "brand": ..., "model": ..., "spec": ..., "base": ...}`；
+   ZOL 采集器按类目页标题自动匹配型号页（可选 `"zol_url"` 手动指定型号页）。
 2. **新增平台**：新建 `hwspider/spiders/xxx.py`，实现 `search_url / parse_search /
-   detect_ban / collect` 四个函数（可仿照 `jd.py`），并在 `spiders/base.py` 的
+   detect_ban / collect` 四个函数（可仿照 `zol.py`），并在 `spiders/base.py` 的
    `collectors()` 注册；把平台名加入 `config.PLATFORMS` 与 `PLATFORM_FACTOR`。
-3. **调反爬**：UA 池 / 代理池 / 限速 / 重试 / 封禁特征词都在 `config.py` 的
-   `ANTI_CRAWL` 中。
+3. **调 ZOL 采集**：类目页 URL 在 `config.ZOL_CATEGORIES`；限速/重试/UA 池/封禁
+   特征词在 `config.ANTI_CRAWL`（ZOL 有防刷限流，`download_delay` 勿低于 2 秒）。
 4. **调调度**：`config.SCHEDULE.times` 修改每日抓取时刻。
 5. **推荐阈值**：`config.RECOMMEND.tie_threshold`（价差 ≤ 该值并列推荐）。
 
@@ -111,11 +119,15 @@ python run.py schedule
 
 ## 七、常见问题
 
-- **`pip install scrapy` 失败（Windows）**：先 `pip install wheel`，或安装
-  Visual C++ Build Tools；缺 Scrapy 也能跑（自动用内置直抓引擎，功能等价）。
-- **真实抓取全是 0 条**：京东/淘宝/天猫反爬严格，登录墙/验证码属正常现象，
-  auto 模式已自动切换模拟行情；如需真实数据，在 `config.ANTI_CRAWL.proxies`
-  配置代理池并降低频率。
+- **`pip install scrapy` 失败（Windows）**：Scrapy 可选；ZOL 采集走内置直抓引擎
+  （requests + lxml），无需 Scrapy。
+- **ZOL 真实抓取全是 0 条**：先查是不是触发了防刷验证（页面跳
+  `service.zol.com.cn/checking`）——把 `config.ANTI_CRAWL.download_delay` 调到
+  5 秒以上、换网络/代理后再试；若是"解析 0 条"，说明 ZOL 页面改版，用
+  `tools/probe_zol_*.py` 探针复测并更新 `zol.py` 的选择器。
+- **个别型号没有价格**：ZOL 类目列表里没有该型号（如 i5-13490F、闪迪 E61）时
+  该 SKU 当日无数据，属正常；可在 `config.CATALOG` 给该条目加 `"zol_url"` 手动
+  指定型号页。
 - **连接数据库失败**：核对 `config.DATABASE` 与后端 `application.yml` 一致
   （默认 root/123456@127.0.0.1:3306/hw_price）。
 - **回填后折线没变化**：回填默认跳过已有日期（不覆盖后端演示数据），

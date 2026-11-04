@@ -45,7 +45,7 @@
 # 1. 建库建表
 mysql -u root -p < sql/schema.sql
 
-# 2. 导入演示数据（4 套餐 + 硬件 + 近 30 天三平台价格）
+# 2. 导入演示数据（4 套餐 + 硬件 + 近 30 天中关村在线价格）
 mysql -u root -p hw_price < sql/init_data.sql
 
 # 3. 改数据库密码：src/main/resources/application.yml 里 spring.datasource.password
@@ -69,7 +69,7 @@ mvn spring-boot:run
 | /api/public/login | POST | 游客 | 登录，返回 JWT + 套餐 + 剩余额度 |
 | /api/public/hardware | GET | 游客 | 首页硬件分类列表 |
 | /api/public/search?keyword= | GET | 游客 | 搜索商品/型号/硬件类目 |
-| /api/public/price/series?type=gpu | GET | 游客 | 价格时序（ECharts 折线数据源 + 推荐购买平台） |
+| /api/public/price/series?type=gpu | GET | 游客 | 价格时序（ECharts 折线数据源 + 高性价比推荐） |
 | /api/public/price/content?type=gpu | GET | 游客 | 硬件文案（功能/场景/避坑） |
 | /api/public/subscribe/plans | GET | 游客 | 4 个订阅套餐与额度权益 |
 | /api/auth/ai/chat | POST | 登录 | AI 问答（文本计 1 次，图片计 2 次） |
@@ -107,7 +107,7 @@ mvn spring-boot:run
 
 `t_user` 用户 ｜ `t_hardware` 硬件类目与文案 ｜ `t_product` 商品主数据 ｜ `t_price_history` 价格时序（爬虫写、后端读）｜ `t_trade` 二手交易（预留）｜ `t_ai_session` AI 会话 ｜ `t_subscription_plan` 套餐配置 ｜ `t_user_subscription` 用户订阅（含等级快照与数据库额度计数器）｜ `t_ai_quota_log` 额度流水。
 
-价格时序由 Python 爬虫子系统（`../爬虫`）持续写入；后端只负责聚合。折线图按"型号 × 日期"取多平台**中位价**，推荐购买平台 = 当日最低价平台（附次低价与差额）。
+价格时序由 Python 爬虫子系统（`../爬虫`）持续写入；后端只负责聚合。折线图按"型号 × 日期"展示中关村在线参考报价；**高性价比推荐** = 性能分（`t_product.perf_score`，1-100 人工维护）÷ 参考价 × 1000 得出性价比指数，指数越大越划算，前端按指数降序展示并标注"高性价比之选"。
 
 ## 七、前端从 Mock 切换到真实后端
 

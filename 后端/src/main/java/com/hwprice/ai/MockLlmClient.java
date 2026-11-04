@@ -68,7 +68,7 @@ public class MockLlmClient implements LlmClient {
             sb.append("\n");
             count++;
         }
-        sb.append("建议：预算充足选贵的型号；同价位优先京东自营，售后省心。");
+        sb.append("建议：预算充足选贵的型号；追求实惠看性价比指数，同价位优先性能分高的型号。");
         return sb.toString();
     }
 

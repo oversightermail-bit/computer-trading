@@ -30,5 +30,6 @@ except ImportError:  # pragma: no cover
 
 def collectors() -> Dict[str, object]:
     """平台名 → collect(hardware_types, limit_pages) 直抓函数。"""
-    from . import jd, taobao, tmall
-    return {"京东": jd.collect, "天猫": tmall.collect, "淘宝": taobao.collect}
+    from . import jd, taobao, tmall, zol
+    return {"京东": jd.collect, "天猫": tmall.collect, "淘宝": taobao.collect,
+            "中关村在线": zol.collect}

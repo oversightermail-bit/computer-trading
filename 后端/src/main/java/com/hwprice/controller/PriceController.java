@@ -39,7 +39,7 @@ public class PriceController {
         return Result.ok(priceService.search(keyword));
     }
 
-    @Operation(summary = "价格时序（折线图数据源）", description = "type 如 cpu/gpu/keyboard；返回多型号多平台中位价时序与推荐购买平台")
+    @Operation(summary = "价格时序（折线图数据源）", description = "type 如 cpu/gpu/keyboard；返回各型号参考价时序与高性价比推荐（性能分/性价比指数）")
     @GetMapping("/price/series")
     public Result<PriceSeriesVO> series(@RequestParam("type") String type) {
         return Result.ok(priceService.series(type));

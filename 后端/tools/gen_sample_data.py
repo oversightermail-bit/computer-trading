@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-生成 sql/init_data.sql：套餐、硬件类目、商品主数据、近 30 天三平台价格时序。
+生成 sql/init_data.sql：套餐、硬件类目、商品主数据、近 30 天中关村在线价格时序。
 价格用固定种子的随机游走生成（可复现）；日期使用 CURDATE() 相对表达式，
 保证任何时候导入，折线图都有"最近 30 天"的新鲜数据。
 
@@ -12,8 +12,9 @@ import random
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(BASE, "sql", "init_data.sql")
 
-PLATFORMS = ["京东", "天猫", "淘宝"]
-PLATFORM_FACTOR = {"京东": 1.00, "天猫": 0.985, "淘宝": 0.97}
+# 2026-11 起主数据源为中关村在线（ZOL）参考报价（真实爬虫写同一平台名）
+PLATFORMS = ["中关村在线"]
+PLATFORM_FACTOR = {"中关村在线": 0.99}
 DAYS = 30  # 折线窗口
 
 # 硬件类目：(type, name, func, scene, pitfall)
@@ -60,53 +61,55 @@ HARDWARE = [
      "回报率不是越高越好（耗电）；对称/人体工学模具手感因人而异；无线鼠标注意接收器收纳。"),
 ]
 
-# 商品主数据：(hardware_type, brand, model, spec, base_price)
+# 商品主数据：(hardware_type, brand, model, spec, base_price, perf_score)
+# perf_score 为性能分（1-100，同类目内相对性能，人工维护），用于"高性价比推荐"
+# （性价比指数 = 性能分 ÷ 参考价 × 1000，越大越划算）。
 PRODUCTS = [
-    ("cpu", "Intel", "i5-12400F", "6核12线程", 749),
-    ("cpu", "Intel", "i5-13490F", "10核16线程", 1099),
-    ("cpu", "Intel", "i7-13700KF", "16核24线程", 1899),
-    ("cpu", "AMD", "R5 5600", "6核12线程", 599),
-    ("cpu", "AMD", "R7 7800X3D", "8核16线程", 2599),
-    ("gpu", "NVIDIA", "RTX 4060", "8GB", 2299),
-    ("gpu", "NVIDIA", "RTX 4060 Ti", "8GB", 2999),
-    ("gpu", "NVIDIA", "RTX 4070 Super", "12GB", 4399),
-    ("gpu", "NVIDIA", "RTX 4080 Super", "16GB", 7599),
-    ("gpu", "AMD", "RX 6750 XT", "12GB", 1899),
-    ("gpu", "AMD", "RX 7900 XT", "20GB", 5299),
-    ("mem_desktop", "金士顿", "FURY 16GB", "DDR4 3200", 289),
-    ("mem_desktop", "金士顿", "FURY 16GB", "DDR5 6000", 429),
-    ("mem_desktop", "威刚", "XPG 32GB", "DDR5 6400", 899),
-    ("mem_desktop", "光威", "天策 16GB", "DDR4 3200", 199),
-    ("mem_laptop", "三星", "16GB", "DDR4 3200", 269),
-    ("mem_laptop", "英睿达", "16GB", "DDR5 4800", 349),
-    ("mem_laptop", "三星", "32GB", "DDR5 5600", 799),
-    ("ssd", "三星", "990 PRO", "1TB", 729),
-    ("ssd", "三星", "990 PRO", "2TB", 1299),
-    ("ssd", "致态", "TiPlus7100", "1TB", 549),
-    ("ssd", "铠侠", "RC20", "1TB", 429),
-    ("ssd", "西部数据", "SN770", "1TB", 529),
-    ("ssd_usb", "闪迪", "E61", "1TB", 699),
-    ("ssd_usb", "三星", "T7", "1TB", 749),
-    ("ssd_usb", "致态", "移动固态", "1TB", 599),
-    ("hdd_usb", "西数", "Elements", "2TB", 499),
-    ("hdd_usb", "希捷", "睿品", "2TB", 529),
-    ("hdd_usb", "东芝", "新小黑", "4TB", 899),
-    ("monitor", "AOC", "24G2", "1080P 144Hz", 799),
-    ("monitor", "小米", "G27Q", "2K 165Hz", 1099),
-    ("monitor", "LG", "27GP850", "2K 180Hz", 1899),
-    ("monitor", "三星", "S27A800", "4K 60Hz", 2399),
-    ("keyboard", "罗技", "G610", "有线机械", 449),
-    ("keyboard", "罗技", "G913", "无线机械", 1299),
-    ("keyboard", "达尔优", "A98", "无线机械", 399),
-    ("keyboard", "雷蛇", "黑寡妇V4", "有线机械", 899),
-    ("keyboard", "双飞燕", "KB-8", "有线薄膜", 59),
-    ("keyboard", "ATK", "68", "有线磁轴", 599),
-    ("mouse", "罗技", "G102", "有线", 99),
-    ("mouse", "罗技", "G304", "无线", 199),
-    ("mouse", "罗技", "GPW 2", "无线", 799),
-    ("mouse", "雷蛇", "蝰蛇V3", "有线", 299),
-    ("mouse", "罗技", "M185", "无线", 69),
-    ("mouse", "双飞燕", "OP-520", "有线", 39),
+    ("cpu", "Intel", "i5-12400F", "6核12线程", 749, 55),
+    ("cpu", "Intel", "i5-13490F", "10核16线程", 1099, 62),
+    ("cpu", "Intel", "i7-13700KF", "16核24线程", 1899, 82),
+    ("cpu", "AMD", "R5 5600", "6核12线程", 599, 52),
+    ("cpu", "AMD", "R7 7800X3D", "8核16线程", 2599, 90),
+    ("gpu", "NVIDIA", "RTX 4060", "8GB", 2299, 60),
+    ("gpu", "NVIDIA", "RTX 4060 Ti", "8GB", 2999, 65),
+    ("gpu", "NVIDIA", "RTX 4070 Super", "12GB", 4399, 80),
+    ("gpu", "NVIDIA", "RTX 4080 Super", "16GB", 7599, 92),
+    ("gpu", "AMD", "RX 6750 XT", "12GB", 1899, 62),
+    ("gpu", "AMD", "RX 7900 XT", "20GB", 5299, 88),
+    ("mem_desktop", "金士顿", "FURY 16GB", "DDR4 3200", 289, 50),
+    ("mem_desktop", "金士顿", "FURY 16GB", "DDR5 6000", 429, 55),
+    ("mem_desktop", "威刚", "XPG 32GB", "DDR5 6400", 899, 78),
+    ("mem_desktop", "光威", "天策 16GB", "DDR4 3200", 199, 48),
+    ("mem_laptop", "三星", "16GB", "DDR4 3200", 269, 52),
+    ("mem_laptop", "英睿达", "16GB", "DDR5 4800", 349, 50),
+    ("mem_laptop", "三星", "32GB", "DDR5 5600", 799, 75),
+    ("ssd", "三星", "990 PRO", "1TB", 729, 85),
+    ("ssd", "三星", "990 PRO", "2TB", 1299, 88),
+    ("ssd", "致态", "TiPlus7100", "1TB", 549, 78),
+    ("ssd", "铠侠", "RC20", "1TB", 429, 55),
+    ("ssd", "西部数据", "SN770", "1TB", 529, 62),
+    ("ssd_usb", "闪迪", "E61", "1TB", 699, 70),
+    ("ssd_usb", "三星", "T7", "1TB", 749, 72),
+    ("ssd_usb", "致态", "移动固态", "1TB", 599, 68),
+    ("hdd_usb", "西数", "Elements", "2TB", 499, 55),
+    ("hdd_usb", "希捷", "睿品", "2TB", 529, 58),
+    ("hdd_usb", "东芝", "新小黑", "4TB", 899, 65),
+    ("monitor", "AOC", "24G2", "1080P 144Hz", 799, 50),
+    ("monitor", "小米", "G27Q", "2K 165Hz", 1099, 68),
+    ("monitor", "LG", "27GP850", "2K 180Hz", 1899, 78),
+    ("monitor", "三星", "S27A800", "4K 60Hz", 2399, 72),
+    ("keyboard", "罗技", "G610", "有线机械", 449, 55),
+    ("keyboard", "罗技", "G913", "无线机械", 1299, 75),
+    ("keyboard", "达尔优", "A98", "无线机械", 399, 60),
+    ("keyboard", "雷蛇", "黑寡妇V4", "有线机械", 899, 72),
+    ("keyboard", "双飞燕", "KB-8", "有线薄膜", 59, 25),
+    ("keyboard", "ATK", "68", "有线磁轴", 599, 65),
+    ("mouse", "罗技", "G102", "有线", 99, 55),
+    ("mouse", "罗技", "G304", "无线", 199, 60),
+    ("mouse", "罗技", "GPW 2", "无线", 799, 85),
+    ("mouse", "雷蛇", "蝰蛇V3", "有线", 299, 78),
+    ("mouse", "罗技", "M185", "无线", 69, 30),
+    ("mouse", "双飞燕", "OP-520", "有线", 39, 25),
 ]
 
 PLANS = [
@@ -165,17 +168,17 @@ def main() -> None:
     w("")
 
     # 商品主数据
-    w("-- 商品/型号主数据（固定 id 1-%d）" % len(PRODUCTS))
-    w("INSERT INTO t_product (id, hardware_type, brand, model, spec) VALUES")
+    w("-- 商品/型号主数据（固定 id 1-%d，perf_score 为性能分，用于高性价比推荐）" % len(PRODUCTS))
+    w("INSERT INTO t_product (id, hardware_type, brand, model, spec, perf_score) VALUES")
     prod_rows = ",\n".join(
-        "(%d, '%s', '%s', '%s', '%s')" % (i + 1, esc(p[0]), esc(p[1]), esc(p[2]), esc(p[3]))
+        "(%d, '%s', '%s', '%s', '%s', %d)" % (i + 1, esc(p[0]), esc(p[1]), esc(p[2]), esc(p[3]), p[5])
         for i, p in enumerate(PRODUCTS)
     )
     w(prod_rows + ";")
     w("")
 
-    # 价格时序：每商品 × 3 平台 × 30 天
-    w("-- 价格时序：每个商品 3 平台 × 30 天，日期 = CURDATE() - INTERVAL n DAY")
+    # 价格时序：每商品 × 1 平台 × 30 天
+    w("-- 价格时序：每个商品 1 平台 × 30 天，日期 = CURDATE() - INTERVAL n DAY")
     w("INSERT INTO t_price_history (product_id, platform, price, date) VALUES")
     rows = []
     for i, p in enumerate(PRODUCTS):

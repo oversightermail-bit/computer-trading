@@ -77,21 +77,16 @@ def write_report(recommendations: List[dict], target_date: Optional[str] = None,
     json_path = config.REPORT_DIR / ("recommend_%s.json" % target_date)
     txt_path = config.REPORT_DIR / ("recommend_%s.txt" % target_date)
 
-    lines = ["推荐购买平台（%s）" % target_date, "=" * 60]
-    lines.append("%-6s %-28s %-6s %9s %-6s %9s %8s" %
-                 ("类目", "型号", "平台", "价格(元)", "次选", "次低价", "差额"))
+    lines = ["当日参考价一览（采集核对 · %s）" % target_date, "=" * 60]
+    lines.append("%-6s %-28s %-10s %9s" % ("类目", "型号", "数据源", "参考价(元)"))
     lines.append("-" * 60)
     for r in recommendations:
         name = config.HARDWARE_NAMES.get(r["hardware_type"], r["hardware_type"])
         model = "%s %s %s" % (r["brand"], r["model"], r["spec"])
         if len(model) > 28:
             model = model[:26] + ".."
-        second = (r["second_platform"] or "-")
-        second_price = ("%.2f" % r["second_price"]) if r["second_price"] is not None else "-"
-        tied = "（并列）" if r["tied"] else ""
-        lines.append("%-6s %-28s %-6s %9.2f %-6s %9s %8s %s" %
-                     (name, model, r["platform"], r["price"], second, second_price,
-                      ("%.2f" % r["diff"]) if r["diff"] else "-", tied))
+        lines.append("%-6s %-28s %-10s %9.2f" %
+                     (name, model, r["platform"], r["price"]))
     try:
         config.LOG_DIR.mkdir(parents=True, exist_ok=True)
         json_path.write_text(json.dumps({

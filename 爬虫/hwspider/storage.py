@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS t_product (
     brand         VARCHAR(50)  NOT NULL COMMENT '品牌',
     model         VARCHAR(100) NOT NULL COMMENT '型号',
     spec          VARCHAR(100) NOT NULL DEFAULT '' COMMENT '规格',
+    perf_score    INT          NOT NULL DEFAULT 0 COMMENT '性能分 1-100（人工维护，用于高性价比推荐）',
     PRIMARY KEY (id),
     KEY idx_hardware_type (hardware_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品/型号主数据';
@@ -178,7 +179,7 @@ DDL_PRICE_HISTORY = """
 CREATE TABLE IF NOT EXISTS t_price_history (
     id         BIGINT         NOT NULL AUTO_INCREMENT COMMENT '主键',
     product_id BIGINT         NOT NULL COMMENT '商品 id',
-    platform   VARCHAR(30)    NOT NULL COMMENT '平台：淘宝/京东/天猫等',
+    platform   VARCHAR(30)    NOT NULL COMMENT '数据源：中关村在线（ZOL）等',
     price      DECIMAL(10, 2) NOT NULL COMMENT '当日价格（元）',
     date       DATE           NOT NULL COMMENT '采集日期',
     PRIMARY KEY (id),

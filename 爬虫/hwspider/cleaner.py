@@ -73,11 +73,13 @@ def clean(raw_items: List) -> pd.DataFrame:
     # 2) 缺失/非正值剔除
     df = df[df["price"].notna() & (df["price"] > 0)].copy()
 
-    # 3) SKU 唯一标识 + 异常抖动剔除（偏离基准价 ±50% 视为脏数据）
+    # 3) SKU 唯一标识 + 异常抖动剔除（偏离基准价过大视为脏数据）。
+    #    区间放宽到 0.3~3.0：ZOL 参考报价对老型号可能仍标官方指导价，
+    #    与目录基准价（市价口径）差距可达 2 倍以上，属正常而非脏数据。
     df["sku"] = df["brand"].str.strip() + "|" + df["model"].str.strip() + "|" + df["spec"].str.strip()
     base_map: Dict[str, float] = {sku: it["base"] for sku, it in catalog_by_sku().items()}
     df["base"] = df["sku"].map(base_map)
-    df = df[df["base"].notna() & (df["price"] / df["base"]).between(0.5, 1.5)].copy()
+    df = df[df["base"].notna() & (df["price"] / df["base"]).between(0.3, 3.0)].copy()
 
     # 4) 同 SKU 同平台同一天多店铺报价 → 中位价（文档：中位数/最低价）
     df["date"] = pd.to_datetime(df["crawled_at"]).dt.date.astype(str)

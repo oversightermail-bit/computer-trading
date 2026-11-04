@@ -19,7 +19,8 @@ from .spiders import base
 
 log = logging.getLogger("hwspider.engine")
 
-PLATFORM_SPIDER_NAME = {"京东": "jd", "天猫": "tmall", "淘宝": "taobao"}
+PLATFORM_SPIDER_NAME = {"京东": "jd", "天猫": "tmall", "淘宝": "taobao",
+                        "中关村在线": "zol"}
 
 
 def collect_platform(platform: str, hardware_types: List[str],

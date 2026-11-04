@@ -11,7 +11,7 @@ from typing import Optional
 
 @dataclass
 class RawItem:
-    platform: str                    # 平台：京东/天猫/淘宝
+    platform: str                    # 数据源：中关村在线（ZOL）等
     hardware_type: str               # 硬件类型编码，如 gpu
     brand: str = ""
     model: str = ""

@@ -21,6 +21,9 @@ public class PriceRow {
 
     private String spec;
 
+    /** 性能分 1-100（来自 t_product.perf_score，用于高性价比推荐） */
+    private Integer perfScore;
+
     private String platform;
 
     private BigDecimal price;
