@@ -50,6 +50,8 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // 游客开放接口
                 .requestMatchers("/api/public/**").permitAll()
+                // 管理员接口（爬虫控制 / AI 网关配置 / 用户管理）
+                .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
                 // Swagger 文档与错误页
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/error").permitAll()
                 // 其余全部需要登录

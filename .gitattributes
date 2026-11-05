@@ -1,0 +1,5 @@
+# ===== 换行符约定（保证 Windows / Linux 克隆后脚本都能直接运行） =====
+# .sh 永远 LF（bash 无法执行 CRLF 脚本）
+*.sh text eol=lf
+# .bat 永远 CRLF（Windows cmd 对 LF 脚本解析易出错）
+*.bat text eol=crlf

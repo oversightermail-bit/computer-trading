@@ -30,7 +30,8 @@ class PlatformStats:
         self.parsed = 0               # 成功解析出的原始条目数
         self.failed = 0               # 失败请求数
         self.banned = False           # 是否检测到封禁信号
-        self.switched_to_mock = False # 是否自动切换模拟行情
+        self.mismatch = 0             # 型号页回校验不匹配丢弃数（防错配 SKU）
+        self.switched_to_mock = False # 是否自动切换模拟行情（2026-11 起不再自动切换）
         self.error = ""               # 异常信息
 
     @property
@@ -48,13 +49,15 @@ class PlatformStats:
             "failed": self.failed,
             "success_rate": round(self.success_rate, 3),
             "banned": self.banned,
+            "mismatch": self.mismatch,
             "switched_to_mock": self.switched_to_mock,
             "error": self.error,
         }
 
 
 def save_run(round_id: str, stats: List[PlatformStats],
-             written: int = 0, products: int = 0, mode: str = "auto") -> None:
+             written: int = 0, products: int = 0, mode: str = "auto",
+             carry_over: int = 0, no_data: int = 0) -> None:
     """追加一轮统计到 logs/crawl_stats.jsonl（保留最近 N 轮）。
 
     日志目录不可写（如受限沙箱）时仅告警到日志器，不阻断采集主流程。
@@ -66,6 +69,8 @@ def save_run(round_id: str, stats: List[PlatformStats],
         "platforms": [s.to_dict() for s in stats],
         "prices_written": written,
         "products_upserted": products,
+        "carry_over": carry_over,   # 未采到真实价的 SKU 中沿用上一真实价的数量
+        "no_data": no_data,         # 未采到真实价且无历史真实价的 SKU 数（显示暂无数据）
     }
     try:
         config.LOG_DIR.mkdir(parents=True, exist_ok=True)

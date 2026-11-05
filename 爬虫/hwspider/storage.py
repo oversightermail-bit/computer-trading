@@ -121,9 +121,12 @@ class Storage:
     def write_price(self, row: dict, overwrite: bool = True) -> None:
         """写入/更新一条价格：product_id × platform × date 幂等。
 
+        source：real=真实采集 / mock=模拟演示（后端聚合只读 source='real'）。
+
         overwrite=True：当日重复采集时刷新为最新价（同一天内价格变化）；
         overwrite=False（回填历史）：已有记录则跳过，不覆盖既有历史。
         """
+        source = row.get("source", "real")
         if self.sink == "mysql":
             pid = self._pid_mysql(row)
             cur = self._conn.cursor()
@@ -132,33 +135,64 @@ class Storage:
                 "AND date=%s LIMIT 1", (pid, row["platform"], row["date"]))
             exists = cur.fetchone()
             if exists and overwrite:
-                cur.execute("UPDATE t_price_history SET price=%s WHERE id=%s",
-                            (row["price"], exists[0]))
+                cur.execute("UPDATE t_price_history SET price=%s, source=%s WHERE id=%s",
+                            (row["price"], source, exists[0]))
                 self.stats["prices_written"] += 1
             elif exists:
                 self.stats["prices_skipped"] += 1
             else:
                 cur.execute(
-                    "INSERT INTO t_price_history (product_id, platform, price, date) "
-                    "VALUES (%s,%s,%s,%s)",
-                    (pid, row["platform"], row["price"], row["date"]))
+                    "INSERT INTO t_price_history (product_id, platform, price, date, source) "
+                    "VALUES (%s,%s,%s,%s,%s)",
+                    (pid, row["platform"], row["price"], row["date"], source))
                 self.stats["prices_written"] += 1
         elif self.sink == "sql":
             pid = self._pid_sql(row)
             w = self._sql_lines.append
-            pf, pr, dt = _esc(row["platform"]), float(row["price"]), _esc(str(row["date"]))
-            w("INSERT INTO t_price_history (product_id, platform, price, date) "
-              "SELECT %s, '%s', %.2f, '%s' FROM DUAL WHERE NOT EXISTS "
+            pf, pr, dt, src = (_esc(row["platform"]), float(row["price"]),
+                               _esc(str(row["date"])), _esc(source))
+            w("INSERT INTO t_price_history (product_id, platform, price, date, source) "
+              "SELECT %s, '%s', %.2f, '%s', '%s' FROM DUAL WHERE NOT EXISTS "
               "(SELECT 1 FROM t_price_history WHERE product_id=%s AND platform='%s' "
-              "AND date='%s');" % (pid, pf, pr, dt, pid, pf, dt))
+              "AND date='%s');" % (pid, pf, pr, dt, src, pid, pf, dt))
             if overwrite:
-                w("UPDATE t_price_history SET price=%.2f "
+                w("UPDATE t_price_history SET price=%.2f, source='%s' "
                   "WHERE product_id=%s AND platform='%s' AND date='%s';"
-                  % (pr, pid, pf, dt))
+                  % (pr, src, pid, pf, dt))
             self.stats["prices_written"] += 1
         elif self.sink == "jsonl":
             self._jsonl_file.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
             self.stats["prices_written"] += 1
+
+    def fallback_stats(self, target_date: str) -> dict:
+        """统计目标日期未写入真实价的目录 SKU（mysql sink 专用，供报告展示）。
+
+        返回 {"carry_over": 有上一真实价可沿用的 SKU 数, "no_data": 完全无真实价 SKU 数}。
+        只统计、不写库：后端聚合按"最新一条 source='real'"自然沿用上一真实价。
+        """
+        out = {"carry_over": 0, "no_data": 0}
+        if self.sink != "mysql" or self._conn is None:
+            return out
+        from .loader import catalog_by_sku
+        cur = self._conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT CONCAT(p.brand,'|',p.model,'|',p.spec) "
+            "FROM t_price_history ph JOIN t_product p ON p.id=ph.product_id "
+            "WHERE ph.date=%s AND ph.source='real'", (target_date,))
+        written = {r[0] for r in cur.fetchall()}
+        for sku, item in catalog_by_sku().items():
+            if sku in written:
+                continue
+            cur.execute(
+                "SELECT COUNT(*) FROM t_price_history ph JOIN t_product p ON p.id=ph.product_id "
+                "WHERE p.hardware_type=%s AND p.brand=%s AND p.model=%s AND p.spec=%s "
+                "AND ph.source='real' AND ph.date < %s",
+                (item["type"], item["brand"], item["model"], item["spec"], target_date))
+            if cur.fetchone()[0] > 0:
+                out["carry_over"] += 1
+            else:
+                out["no_data"] += 1
+        return out
 
 
 # ---------------- 建表（init 命令用，与后端 schema.sql 同构） ----------------
@@ -169,7 +203,9 @@ CREATE TABLE IF NOT EXISTS t_product (
     brand         VARCHAR(50)  NOT NULL COMMENT '品牌',
     model         VARCHAR(100) NOT NULL COMMENT '型号',
     spec          VARCHAR(100) NOT NULL DEFAULT '' COMMENT '规格',
-    perf_score    INT          NOT NULL DEFAULT 0 COMMENT '性能分 1-100（人工维护，用于高性价比推荐）',
+    perf_score    INT          NOT NULL DEFAULT 0 COMMENT '性能分 1-100（基准自动映射，用于高性价比推荐）',
+    perf_basis    VARCHAR(200) NOT NULL DEFAULT '' COMMENT '性能分依据（基准/官方规格与公式）',
+    perf_updated  DATE         NULL COMMENT '性能分更新日期',
     PRIMARY KEY (id),
     KEY idx_hardware_type (hardware_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品/型号主数据';
@@ -182,6 +218,7 @@ CREATE TABLE IF NOT EXISTS t_price_history (
     platform   VARCHAR(30)    NOT NULL COMMENT '数据源：中关村在线（ZOL）等',
     price      DECIMAL(10, 2) NOT NULL COMMENT '当日价格（元）',
     date       DATE           NOT NULL COMMENT '采集日期',
+    source     VARCHAR(10)    NOT NULL DEFAULT 'real' COMMENT 'real=真实采集 mock=模拟演示（后端只聚合 real）',
     PRIMARY KEY (id),
     KEY idx_product_date (product_id, date),
     KEY idx_date (date)

@@ -72,26 +72,37 @@ python run.py schedule
 > （`logs/crawl_sql.sql`），用 `mysql -uroot -p hw_price < logs/crawl_sql.sql`
 > 导入效果与直连完全一致。
 
-## 三、采集模式（mode）
+## 三、采集模式（mode，2026-11-05 起收紧口径）
 
 | 模式 | 行为 | 适用场景 |
 |---|---|---|
-| `auto`（默认） | 先真实抓取；检测到**封禁信号 / 零解析 / 网络失败**时，该平台自动切换**模拟行情**，其余平台不受影响 | 日常运行、比赛演示 |
-| `real` | 只走真实抓取，失败不降级 | 验证真实反爬策略 |
-| `mock` | 直接使用模拟行情（固定种子随机游走，确定可复现） | 无网演示、回填历史 |
+| `real`（默认） | 只走真实抓取；**失败/封禁/零解析一律不降级**。采不到的 SKU 当日不写库，后端聚合自动"沿用上一真实价"，完全无数据显示"暂无数据" | 日常运行、后端管理页"启动爬虫"按钮 |
+| `auto` | 同 `real`（保留兼容，不再自动切换模拟行情） | - |
+| `mock` | 直接使用模拟行情（固定种子随机游走，确定可复现），入库 `source='mock'`，后端只聚合 `source='real'`，模拟价绝不会冒充真实价 | 仅比赛演示 / `backfill` 回填 |
+
+**价格质量三重校验（防错配 / 防脏数据）**：
+1. 型号页标题回校验：详情页 `<title>` 必须匹配回目录 SKU，不匹配直接丢弃
+   （统计字段 `mismatch`）；
+2. 合理性校验：与目录基准价偏差超出 **±30%**（`config.PLAUSIBILITY`）视为
+   错配/脏数据丢弃，当日不写入 → 后端自然沿用上一真实价；
+3. 采不到即"暂无数据"：绝不生成模拟价填充（模拟价仅显式 `--mode mock` 时
+   写入，且与真实数据按 `t_price_history.source` 完全隔离）。
+
+每轮结束打印"未采到真实价的 SKU：沿用上一真实价 N ｜ 暂无数据 M"。
 
 模拟行情与后端演示数据同思路（固定种子随机游走、中关村在线系数 0.99、
 小概率促销），同一天多次运行结果完全一致，不会产生自相矛盾的历史数据。
 
 ## 四、与后端的契约
 
-- 写入两张表：`t_product`（按 硬件类型+品牌+型号+规格 幂等 upsert，自动复用后端
-  init_data.sql 已有的 id 1-45）与 `t_price_history`（商品 × 平台 × 日期一行，
+- 写入两张表：`t_product`（按 硬件类型+品牌+型号+规格 幂等 upsert）与
+  `t_price_history`（商品 × 平台 × 日期一行，含 `source` 列：real/mock，
   同日重跑刷新价格，绝不产生重复行）。
 - 平台名与后端一致：**中关村在线**；硬件类型编码与 `t_hardware.type` 一致
   （cpu/gpu/mem_desktop/mem_laptop/ssd/ssd_usb/hdd_usb/monitor/keyboard/mouse）。
-- 后端 `/api/public/price/series` 直接聚合 `t_price_history` 出折线 +
-  高性价比推荐（性能分 `t_product.perf_score` ÷ 参考价 × 1000 = 性价比指数）；
+- 后端 `/api/public/price/series` 只聚合 `source='real'` 的真实采集价出折线 +
+  高性价比推荐（性能分由 PassMark/3DMark/官方规格自动映射 1-100，见
+  `../../perf_benchmarks.json`；性价比指数 = 性能分 ÷ ln(参考价) × 100）；
   爬虫侧 `logs/recommend_YYYY-MM-DD.txt` 输出当日各型号参考价清单供采集核对。
 - 二手交易（F5）本期不开发，爬虫不涉及 `t_trade`。
 
@@ -125,10 +136,12 @@ python run.py schedule
   `service.zol.com.cn/checking`）——把 `config.ANTI_CRAWL.download_delay` 调到
   5 秒以上、换网络/代理后再试；若是"解析 0 条"，说明 ZOL 页面改版，用
   `tools/probe_zol_*.py` 探针复测并更新 `zol.py` 的选择器。
-- **个别型号没有价格**：ZOL 类目列表里没有该型号（如 i5-13490F、闪迪 E61）时
-  该 SKU 当日无数据，属正常；可在 `config.CATALOG` 给该条目加 `"zol_url"` 手动
-  指定型号页。
+- **个别型号没有价格**：ZOL 类目列表里没有该型号、或回校验/合理性校验被拦截时
+  该 SKU 当日无数据，属正常（页面显示"暂无数据"，后端沿用上一真实价）；
+  可在 `config.CATALOG` 给该条目加 `"zol_url"` 手动指定型号页。
 - **连接数据库失败**：核对 `config.DATABASE` 与后端 `application.yml` 一致
   （默认 root/123456@127.0.0.1:3306/hw_price）。
-- **回填后折线没变化**：回填默认跳过已有日期（不覆盖后端演示数据），
-  加 `--overwrite` 才会覆盖历史。
+- **回填后折线没变化**：`backfill` 写入的是 `source='mock'` 演示数据，
+  后端只聚合 `source='real'`，因此回填不会出现在真实页面；要真实历史只能
+  靠每日多次真实采集持续积累。首次部署可执行 `tools/migrate_quality.py`
+  （建列 / 基准性能分 / 清空模拟价），随后 `python run.py once` 真实采集。

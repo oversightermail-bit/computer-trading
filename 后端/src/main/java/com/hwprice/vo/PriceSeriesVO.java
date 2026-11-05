@@ -49,11 +49,18 @@ public class PriceSeriesVO {
         private String model;
         /** 规格 */
         private String spec;
-        /** 今日参考价（数据源：中关村在线参考报价） */
+        /** 参考价（最新真实采集日各来源最低价；无真实价时为 null，前端显示"暂无数据"） */
         private BigDecimal price;
-        /** 性能分 1-100（人工维护，用于高性价比推荐） */
+        /** 参考价对应的真实采集日期（沿用上一真实价时即上一采集日） */
+        private java.time.LocalDate priceDate;
+        /** 性能分 1-100（基准自动映射，PassMark/3DMark/官方规格） */
         private Integer perf;
-        /** 性价比指数 = 性能分 ÷ 参考价 × 1000，越大越划算（perf=0 时为 null） */
+        /** 性能分依据（基准数值与公式），悬浮提示用 */
+        private String perfBasis;
+        /**
+         * 性价比指数 = 性能分 ÷ ln(参考价) × 100（对数归一化，抑制"越便宜分越高"偏差）。
+         * 无真实价或性能分未维护时为 null，前端不参与排序。
+         */
         private BigDecimal valueIndex;
     }
 }

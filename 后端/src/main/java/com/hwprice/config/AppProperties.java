@@ -15,6 +15,7 @@ public class AppProperties {
     private Cache cache = new Cache();
     private Quota quota = new Quota();
     private Subscribe subscribe = new Subscribe();
+    private Crawler crawler = new Crawler();
 
     @Data
     public static class Jwt {
@@ -26,20 +27,10 @@ public class AppProperties {
 
     @Data
     public static class Ai {
-        /** mock = 本地内置演示模型；openai = OpenAI 兼容接口 */
-        private String provider = "mock";
         /** 回答压缩最大字符数 */
         private int compressMaxChars = 500;
         /** 大模型调用超时（秒） */
         private int timeoutSeconds = 30;
-        private OpenAi openai = new OpenAi();
-
-        @Data
-        public static class OpenAi {
-            private String baseUrl = "https://api.openai.com/v1";
-            private String apiKey = "";
-            private String model = "gpt-4o-mini";
-        }
     }
 
     @Data
@@ -60,5 +51,13 @@ public class AppProperties {
         private boolean skipPayment = true;
         /** 到期回落免费级定时任务 cron */
         private String expireCheckCron = "0 0 * * * ?";
+    }
+
+    @Data
+    public static class Crawler {
+        /** 爬虫子模块工作目录（相对后端运行目录或绝对路径） */
+        private String workDir = "../爬虫";
+        /** 启动爬虫的命令（管理页"启动爬虫"按钮） */
+        private String command = "python run.py once --mode real";
     }
 }

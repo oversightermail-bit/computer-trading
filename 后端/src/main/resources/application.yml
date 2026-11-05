@@ -61,15 +61,17 @@ app:
     # token 有效期（小时）
     expire-hours: 168
   ai:
-    # 大模型提供方：mock = 本地内置演示模型（无需任何外网与密钥）；openai = OpenAI 兼容接口
-    provider: mock
+    # 运行时路由：管理员在管理页配置 API 密钥（t_app_config.ai.apiKey）
+    # 即走 OpenAI 兼容云端大模型；未配置密钥自动回落本地 Mock 演示模型。
+    # 接口地址与模型名**没有默认值**，必须由管理员在管理页填写（任意
+    # OpenAI 兼容网关，如 DeepSeek/通义/Kimi 等），填写密钥时同步必填。
     # 回答压缩后的最大字符数（"简短的大白话"约束）
     compress-max-chars: 500
     timeout-seconds: 30
-    openai:
-      base-url: https://api.openai.com/v1
-      api-key: ""
-      model: gpt-4o-mini
+  crawler:
+    # 管理页"启动爬虫"按钮：工作目录 + 命令（只写真实采集价，采不到显示暂无数据）
+    work-dir: "../爬虫"
+    command: "python run.py once --mode real"
   cache:
     # 价格折线数据在 Redis 中的缓存时间（分钟）
     price-ttl-minutes: 5

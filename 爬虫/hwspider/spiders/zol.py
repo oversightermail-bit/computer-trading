@@ -3,13 +3,14 @@
 
 策略（2026-11 实测有效）：
   1. 抓每个硬件类目的分类列表页（单页全量、不分页），解析 (商品名, 型号页链接)；
-  2. 用归一化匹配把型号页链接对应回 config.CATALOG 的 45 个 SKU
+  2. 用归一化匹配把型号页链接对应回 config.CATALOG 的 58 个 SKU
      （兼容 "i5 12400F" vs "i5-12400F"、"R5 5600" vs "Ryzen 5 5600" 等写法差异）；
   3. 逐型号抓详情页，取"参考报价"（<b class="price-type">1830</b>）；
   4. 全程限速 + 重试；识别 service.zol.com.cn/checking 防刷页并上报封禁信号。
 
 注意：ZOL 页面为 GBK 编码；ZOL 有防刷限流，切勿提高并发。
 """
+import logging
 import re
 import time
 from typing import List, Optional, Tuple
@@ -36,7 +37,7 @@ _BRAND_ALIAS = {
     "西部数据": ["西部数据", "西数", "wd", "western"],
     "雷蛇": ["雷蛇", "razer"],
     "罗技": ["罗技", "logitech"],
-    "小米": ["小米", "xiaomi", "红米"],
+    "小米": ["小米", "xiaomi", "红米", "redmi"],
     "达尔优": ["达尔优"],
     "双飞燕": ["双飞燕"],
     "希捷": ["希捷", "seagate"],
@@ -55,8 +56,12 @@ _NORM_RE = re.compile(r"[\s\-_./＋+（）()·,，:：×xX]")
 
 # 目录型号 → ZOL 标题里的实际写法（个别型号在 ZOL 的命名不同/更全）
 _TITLE_OVERRIDE = {
-    ("雷蛇", "黑寡妇V4"): ["黑寡妇"],       # ZOL: 黑寡妇蜘蛛V4
-    ("致态", "移动固态"): ["灵·潮流版"],     # ZOL: 致态灵·潮流版（致态移动固态 1TB）
+    ("雷蛇", "黑寡妇V4"): ["黑寡妇"],           # ZOL: 黑寡妇蜘蛛V4
+    ("致态", "移动固态"): ["灵·潮流版"],         # ZOL: 致态灵·潮流版（致态移动固态 1TB）
+    ("金士顿", "FURY 16GB"): ["FURY Beast 16GB"],  # ZOL: 金士顿FURY Beast 16GB DDR5...
+    ("金士顿", "FURY 32GB"): ["FURY Beast 32GB"],  # ZOL: 金士顿FURY Beast 32GB DDR5 6000
+    ("铠侠", "RC20"): ["EXCERIA G2"],           # 铠侠 RC20 在 ZOL 名为 EXCERIA G2
+    ("威刚", "XPG 32GB"): ["DDR5 6400 32GB"],   # ZOL: 威刚XPG 威龙 D500 DDR5 6400 32GB
 }
 
 
@@ -192,6 +197,20 @@ def _reject_conflicting_spec(item: dict, raw_title: str, title_norm: str) -> Opt
     return item
 
 
+def parse_title(html: str) -> str:
+    """解析详情页 <title>，用于回校验：确认抓的页面确实属于目标 SKU。"""
+    if not html:
+        return ""
+    try:
+        tree = lxml_html.fromstring(html)
+    except Exception:
+        return ""
+    title = (tree.xpath("string(//title)") or "").strip()
+    # ZOL 标题常见格式： 【华硕 TUF RTX 4060 Ti ...】报价_参数_图片_论坛
+    title = title.split("_参数")[0].split("】")[0].replace("【", "").strip()
+    return title
+
+
 def parse_product(html: str, base_url: str) -> Tuple[str, bool]:
     """解析型号详情页，返回 (参考报价文本, 封禁)。
 
@@ -209,7 +228,7 @@ def parse_product(html: str, base_url: str) -> Tuple[str, bool]:
     price = (tree.xpath('string(//b[@class="price-type"])') or "").strip()
     if not price:
         price = (tree.xpath('string(//span[@class="price-type"])') or "").strip()
-    if any(w in price for w in ("暂无", "面议", "停产", "无货")):
+    if any(w in price for w in ("暂无", "面议", "停产", "无货", "即将上市")):
         return "", banned
     return price, banned
 
@@ -225,7 +244,7 @@ def collect(hardware_types: List[str], limit_pages: Optional[int] = None) -> Tup
     """
     items: List[RawItem] = []
     stats = {"requested": 0, "parsed": 0, "failed": 0, "banned": False,
-             "matched": 0, "no_price": 0, "error": ""}
+             "matched": 0, "no_price": 0, "mismatch": 0, "error": ""}
 
     for hw_type in hardware_types:
         cat_url = search_url(hw_type)
@@ -308,7 +327,8 @@ def collect(hardware_types: List[str], limit_pages: Optional[int] = None) -> Tup
 
         for item in catalog_items:
             sku = "%s|%s|%s" % (item["brand"], item["model"], item["spec"])
-            url = url_by_sku.get(sku)
+            # 优先类目页匹配到的链接；没有则用目录里人工指定的 zol_url 直采
+            url = url_by_sku.get(sku) or item.get("zol_url")
             if not url:
                 continue
             stats["matched"] += 1
@@ -317,6 +337,19 @@ def collect(hardware_types: List[str], limit_pages: Optional[int] = None) -> Tup
             html, final_url, err = fetch(url, referer=cat_url)
             if err:
                 stats["failed"] += 1
+                continue
+            # 回校验：详情页标题必须匹配回该 SKU（防类目页/系列页错配链接，
+            # 例如把 RTX 4060 Ti 记成别的卡的价格；配不上的直接丢弃）
+            page_sku = None
+            matched_item = match_catalog(parse_title(html), hw_type)
+            if matched_item is not None:
+                page_sku = "%s|%s|%s" % (matched_item["brand"], matched_item["model"],
+                                         matched_item["spec"])
+            if page_sku != sku:
+                stats["mismatch"] += 1
+                logging.getLogger("hwspider.zol").warning(
+                    "型号页回校验失败（SKU 不匹配），丢弃：期望 %s，页面 %s，url=%s",
+                    sku, page_sku or "未匹配", url)
                 continue
             price_text, banned = parse_product(html, final_url)
             if banned:
@@ -379,6 +412,14 @@ try:
 
         def parse_product(self, response):
             item = response.meta["item"]
+            sku = "%s|%s|%s" % (item["brand"], item["model"], item["spec"])
+            # 回校验：页面标题必须匹配目标 SKU（与直抓路径同口径）
+            matched = match_catalog(parse_title(response.text), item["type"])
+            page_sku = None
+            if matched is not None:
+                page_sku = "%s|%s|%s" % (matched["brand"], matched["model"], matched["spec"])
+            if page_sku != sku:
+                return
             price_text, banned = parse_product(response.text, response.url)
             self.banned = self.banned or banned
             if price_text:

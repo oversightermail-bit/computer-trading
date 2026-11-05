@@ -4,7 +4,6 @@ import com.hwprice.service.PriceService;
 import com.hwprice.vo.SearchResultVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -14,14 +13,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 本地内置演示模型（app.ai.provider=mock）：
+ * 本地内置演示模型：
  * 无需外网与密钥，基于网站真实价格数据用规则生成"简短大白话"推荐，
  * 用于比赛演示与无 LLM 环境的本地开发调试。
+ * 由 ConfigLlmClient 在"未配置 API 密钥"时路由到本实现。
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "app.ai", name = "provider", havingValue = "mock", matchIfMissing = true)
 public class MockLlmClient implements LlmClient {
 
     private final PriceService priceService;

@@ -41,7 +41,9 @@ CREATE TABLE t_product (
     brand         VARCHAR(50)  NOT NULL COMMENT '品牌',
     model         VARCHAR(100) NOT NULL COMMENT '型号',
     spec          VARCHAR(100) NOT NULL DEFAULT '' COMMENT '规格，如 12GB / DDR5 6000 / 1TB',
-    perf_score    INT          NOT NULL DEFAULT 0 COMMENT '性能分 1-100（人工维护，用于高性价比推荐）',
+    perf_score    INT          NOT NULL DEFAULT 0 COMMENT '性能分 1-100（基准自动映射，用于高性价比推荐）',
+    perf_basis    VARCHAR(200) NOT NULL DEFAULT '' COMMENT '性能分依据（基准/官方规格与公式）',
+    perf_updated  DATE         NULL COMMENT '性能分更新日期',
     PRIMARY KEY (id),
     KEY idx_hardware_type (hardware_type)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '商品/型号主数据';
@@ -54,6 +56,7 @@ CREATE TABLE t_price_history (
     platform   VARCHAR(30)    NOT NULL COMMENT '数据源：中关村在线（ZOL）等',
     price      DECIMAL(10, 2) NOT NULL COMMENT '当日价格（元）',
     date       DATE           NOT NULL COMMENT '采集日期',
+    source     VARCHAR(10)    NOT NULL DEFAULT 'real' COMMENT 'real=真实采集 mock=模拟演示（后端只聚合 real）',
     PRIMARY KEY (id),
     KEY idx_product_date (product_id, date),
     KEY idx_date (date)
@@ -138,3 +141,13 @@ CREATE TABLE t_ai_quota_log (
     KEY idx_user_time (user_id, create_time),
     KEY idx_session (session_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI 额度消耗流水';
+
+-- ---------- 应用配置（管理员维护：AI API 密钥等） ----------
+CREATE TABLE IF NOT EXISTS t_app_config (
+    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    cfg_key     VARCHAR(64)  NOT NULL COMMENT '配置键，如 ai.apiKey',
+    cfg_value   VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '配置值',
+    update_time DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_cfg_key (cfg_key)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '应用配置（管理员维护）';

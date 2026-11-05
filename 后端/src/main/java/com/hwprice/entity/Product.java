@@ -25,6 +25,12 @@ public class Product {
     /** 规格，如 12GB / DDR5 6000 / 1TB */
     private String spec;
 
-    /** 性能分 1-100（人工维护，用于高性价比推荐：性价比指数 = 性能分 ÷ 价格） */
+    /** 性能分 1-100（基准自动映射：PassMark/3DMark/官方规格，用于高性价比推荐） */
     private Integer perfScore;
+
+    /** 性能分依据（基准数值与公式） */
+    private String perfBasis;
+
+    /** 性能分更新日期 */
+    private java.time.LocalDate perfUpdated;
 }

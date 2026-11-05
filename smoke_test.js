@@ -57,7 +57,7 @@ function check(name, cond, extra) {
   console.log('[2] 公开数据');
   r = await api.hardware();
   check('10 类硬件', r.code === 0 && r.data.length === 10, r.data && r.data.length);
-  check('45 个型号合计', r.code === 0 && r.data.reduce((a, b) => a + b.productCount, 0) === 45);
+  check('58 个型号合计', r.code === 0 && r.data.reduce((a, b) => a + b.productCount, 0) === 58);
   r = await api.search('4060');
   check('搜索 4060 命中型号', r.code === 0 && r.data.products.some(p => p.model.indexOf('4060') >= 0), r.data && r.data.products && r.data.products.length);
   r = await api.search('固态');

@@ -1,6 +1,11 @@
 /* ============================================================
  * login.js —— 登录 / 注册页逻辑（F1）
  * 登录成功：保存 JWT 与用户，跳回来源页（或首页）
+ * Mock 演示模式（2026-11 起）：
+ *   - 演示账号不在页面展示；手动输入 demo / demo123 登录成功后
+ *     自动切换 AppConfig 为 mock（本地演示数据），顶栏显示"演示模式"徽章；
+ *   - 退出登录自动切回 real；
+ *   - 注册用户一律走真实后端，绝不进入 mock 模式。
  * ============================================================ */
 (function () {
   'use strict';
@@ -23,14 +28,22 @@
   var params = new URLSearchParams(location.search);
   if (params.get('mode') === 'register') switchTab('register');
 
-  function afterLogin() {
+  function afterLogin(username) {
     var back = null;
     try { back = sessionStorage.getItem('hwprice_after_login'); } catch (e) {}
-    UI.toast('登录成功，欢迎回来！');
+    // 演示账号：登录成功即进入 Mock 演示模式（并确保演示数据已预置）
+    if (username === 'demo') {
+      AppConfig.setMode('mock');
+      if (window.MockApi && window.MockApi.ensureDemo) window.MockApi.ensureDemo();
+      UI.toast('已进入演示（Mock）模式：页面数据为本地演示数据');
+    } else {
+      AppConfig.setMode('real');
+      UI.toast('登录成功，欢迎回来！');
+    }
     setTimeout(function () { location.href = back || '../首页/shouye.html'; }, 700);
   }
 
-  /* 登录 */
+  /* 登录：一律走真实后端校验（demo 在后端也存在，登录后前端切 mock） */
   loginForm.onsubmit = function (e) {
     e.preventDefault();
     var u = document.getElementById('loginUsername').value.trim();
@@ -39,10 +52,10 @@
     if (!p) { UI.toast('请输入密码', 'err'); return; }
     var btn = document.getElementById('loginBtn');
     btn.disabled = true; btn.textContent = '登录中…';
-    api.login({ username: u, password: p }).then(function (res) {
+    window.RealApi.login({ username: u, password: p }).then(function (res) {
       if (res.code === 0) {
-        Auth.login({ token: res.data.token, user: u });
-        afterLogin();
+        Auth.login({ token: res.data.token, user: u, role: res.data.role });
+        afterLogin(u);
       } else {
         btn.disabled = false; btn.textContent = '登 录';
         UI.toast(res.message || '登录失败', 'err');
@@ -50,7 +63,7 @@
     });
   };
 
-  /* 注册 */
+  /* 注册：一律走真实后端；注册用户使用正常（真实）功能，不进入 mock 模式 */
   regForm.onsubmit = function (e) {
     e.preventDefault();
     var u = document.getElementById('regUsername').value.trim();
@@ -61,13 +74,13 @@
     if (p !== p2) { UI.toast('两次输入的密码不一致', 'err'); return; }
     var btn = document.getElementById('regBtn');
     btn.disabled = true; btn.textContent = '注册中…';
-    api.register({ username: u, password: p }).then(function (res) {
+    window.RealApi.register({ username: u, password: p }).then(function (res) {
       if (res.code === 0) {
         UI.toast('注册成功，正在自动登录…');
-        api.login({ username: u, password: p }).then(function (res2) {
+        window.RealApi.login({ username: u, password: p }).then(function (res2) {
           if (res2.code === 0) {
-            Auth.login({ token: res2.data.token, user: u });
-            afterLogin();
+            Auth.login({ token: res2.data.token, user: u, role: res2.data.role });
+            afterLogin(u);
           } else {
             switchTab('login');
             document.getElementById('loginUsername').value = u;
@@ -79,13 +92,5 @@
         UI.toast(res.message || '注册失败', 'err');
       }
     });
-  };
-
-  /* 演示账号一键填入 */
-  document.getElementById('demoFill').onclick = function () {
-    document.getElementById('loginUsername').value = 'demo';
-    document.getElementById('loginPassword').value = 'demo123';
-    switchTab('login');
-    loginForm.requestSubmit();
   };
 })();

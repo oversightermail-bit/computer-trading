@@ -21,8 +21,14 @@ public class PriceRow {
 
     private String spec;
 
-    /** 性能分 1-100（来自 t_product.perf_score，用于高性价比推荐） */
+    /** 性能分 1-100（来自 t_product.perf_score，基准自动映射，用于高性价比推荐） */
     private Integer perfScore;
+
+    /** 性能分依据（基准数值与公式） */
+    private String perfBasis;
+
+    /** 性能分更新日期 */
+    private LocalDate perfUpdated;
 
     private String platform;
 

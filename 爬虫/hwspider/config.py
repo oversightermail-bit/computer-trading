@@ -37,6 +37,10 @@ DATABASE = {
 # 2026-11 起主数据源改为中关村在线 ZOL（京东/天猫/淘宝真实抓取已被反爬封死，见 README）
 PLATFORMS = ["中关村在线"]
 
+# 默认采集模式：real（只写真实采集价）。mock 仅为比赛演示/回填显式使用，
+# 且入库时 source='mock'，后端聚合只读 source='real'，模拟价不可能冒充真实价。
+DEFAULT_MODE = "real"
+
 # 各平台相对基准价系数（与后端演示数据口径一致，用于模拟行情与校验）
 PLATFORM_FACTOR = {"京东": 1.00, "天猫": 0.985, "淘宝": 0.97, "中关村在线": 0.99}
 
@@ -99,6 +103,15 @@ RECOMMEND = {
     "tie_threshold": 5.0,
 }
 
+# ---------------- 价格合理性校验（2026-11-05 起生效） ----------------
+# 采集价与目录基准价偏差超出该区间视为错配/脏数据：丢弃该条，
+# 当日不写入 → 后端聚合自然"沿用上一真实价"；完全采不到则显示"暂无数据"。
+PLAUSIBILITY = {
+    "ratio_min": 0.70,   # 低于基准价 30%：疑似促销/残次/错配
+    "ratio_max": 1.30,   # 高于基准价 30%：疑似错配 SKU 或过期指导价
+}
+
+
 # ---------------- 监控与告警 ----------------
 MONITOR = {
     "alert_success_rate": 0.5,   # 真实抓取成功率低于该值即告警
@@ -120,14 +133,14 @@ MOCK = {
 }
 
 # ---------------- 商品目录（SKU 主数据 + 采集关键词 + 模拟基准价） ----------------
-# 与后端 sql/init_data.sql 的 45 个型号保持一致：爬虫按 (品牌,型号,规格)
+# 与后端 sql/init_data.sql 的 58 个型号保持一致：爬虫按 (品牌,型号,规格)
 # 匹配复用 t_product 已有记录（id 1-45），不会产生重复商品。
 # 扩展硬件类目：在 CATALOG 追加条目即可，Spider 自动按 hardware_type 生成关键词。
 CATALOG = [
     # ---- CPU（台式机） ----
     {"type": "cpu", "brand": "Intel", "model": "i5-12400F", "spec": "6核12线程", "base": 749},
-    {"type": "cpu", "brand": "Intel", "model": "i5-13490F", "spec": "10核16线程", "base": 1099},
-    {"type": "cpu", "brand": "Intel", "model": "i7-13700KF", "spec": "16核24线程", "base": 1899},
+    {"type": "cpu", "brand": "Intel", "model": "i5-13490F", "spec": "10核16线程", "zol_url": "https://detail.zol.com.cn/cpu/index1457696.shtml", "base": 1099},
+    {"type": "cpu", "brand": "Intel", "model": "i7-13700KF", "spec": "16核24线程", "zol_url": "https://detail.zol.com.cn/cpu/index1429329.shtml", "base": 1899},
     {"type": "cpu", "brand": "AMD", "model": "R5 5600", "spec": "6核12线程", "base": 599},
     {"type": "cpu", "brand": "AMD", "model": "R7 7800X3D", "spec": "8核16线程", "base": 2599},
     # ---- GPU（台式机） ----
@@ -139,46 +152,59 @@ CATALOG = [
     {"type": "gpu", "brand": "AMD", "model": "RX 7900 XT", "spec": "20GB", "base": 5299},
     # ---- 内存条（台式机 DDR4/DDR5） ----
     {"type": "mem_desktop", "brand": "金士顿", "model": "FURY 16GB", "spec": "DDR4 3200", "base": 289},
-    {"type": "mem_desktop", "brand": "金士顿", "model": "FURY 16GB", "spec": "DDR5 6000", "base": 429},
-    {"type": "mem_desktop", "brand": "威刚", "model": "XPG 32GB", "spec": "DDR5 6400", "base": 899},
-    {"type": "mem_desktop", "brand": "光威", "model": "天策 16GB", "spec": "DDR4 3200", "base": 199},
+    {"type": "mem_desktop", "brand": "金士顿", "model": "FURY 16GB", "spec": "DDR5 6000", "zol_url": "https://detail.zol.com.cn/memory/index1416465.shtml", "base": 429},
+    {"type": "mem_desktop", "brand": "威刚", "model": "XPG 32GB", "spec": "DDR5 6400", "zol_url": "https://detail.zol.com.cn/memory/index1984560.shtml", "base": 899},
+    {"type": "mem_desktop", "brand": "光威", "model": "天策 16GB", "spec": "DDR4 3200", "zol_url": "https://detail.zol.com.cn/memory/index1382782.shtml", "base": 199},
     # ---- 内存条（笔记本） ----
-    {"type": "mem_laptop", "brand": "三星", "model": "16GB", "spec": "DDR4 3200", "base": 269},
+    {"type": "mem_laptop", "brand": "三星", "model": "16GB", "spec": "DDR4 3200", "zol_url": "https://detail.zol.com.cn/memory/index1373420.shtml", "base": 269},
     {"type": "mem_laptop", "brand": "英睿达", "model": "16GB", "spec": "DDR5 4800", "base": 349},
-    {"type": "mem_laptop", "brand": "三星", "model": "32GB", "spec": "DDR5 5600", "base": 799},
+    {"type": "mem_laptop", "brand": "英睿达", "model": "32GB", "spec": "DDR5 5600", "zol_url": "https://detail.zol.com.cn/memory/index1857393.shtml", "base": 899},
     # ---- 固态硬盘（M.2 NVMe PCIe 4.0/5.0） ----
-    {"type": "ssd", "brand": "三星", "model": "990 PRO", "spec": "1TB", "base": 729},
-    {"type": "ssd", "brand": "三星", "model": "990 PRO", "spec": "2TB", "base": 1299},
+    {"type": "ssd", "brand": "三星", "model": "990 PRO", "spec": "1TB", "zol_url": "https://detail.zol.com.cn/solid_state_drive/index1425885.shtml", "base": 729},
+    {"type": "ssd", "brand": "三星", "model": "990 PRO", "spec": "2TB", "zol_url": "https://detail.zol.com.cn/solid_state_drive/index1425886.shtml", "base": 1299},
     {"type": "ssd", "brand": "致态", "model": "TiPlus7100", "spec": "1TB", "base": 549},
-    {"type": "ssd", "brand": "铠侠", "model": "RC20", "spec": "1TB", "base": 429},
-    {"type": "ssd", "brand": "西部数据", "model": "SN770", "spec": "1TB", "base": 529},
+    {"type": "ssd", "brand": "铠侠", "model": "RC20", "spec": "1TB", "zol_url": "https://detail.zol.com.cn/solid_state_drive/index1380785.shtml", "base": 429},
+    {"type": "ssd", "brand": "金士顿", "model": "KC3000", "spec": "1TB", "zol_url": "https://detail.zol.com.cn/solid_state_drive/index1403069.shtml", "base": 599},
     # ---- 移动便携固态硬盘（USB） ----
-    {"type": "ssd_usb", "brand": "闪迪", "model": "E61", "spec": "1TB", "base": 699},
+    {"type": "ssd_usb", "brand": "闪迪", "model": "E61", "spec": "1TB", "zol_url": "https://detail.zol.com.cn/move_disk/index1794797.shtml", "base": 699},
     {"type": "ssd_usb", "brand": "三星", "model": "T7", "spec": "1TB", "base": 749},
     {"type": "ssd_usb", "brand": "致态", "model": "移动固态", "spec": "1TB", "base": 599},
     # ---- 移动便携机械硬盘（USB） ----
     {"type": "hdd_usb", "brand": "西数", "model": "Elements", "spec": "2TB", "base": 499},
     {"type": "hdd_usb", "brand": "希捷", "model": "睿品", "spec": "2TB", "base": 529},
-    {"type": "hdd_usb", "brand": "东芝", "model": "新小黑", "spec": "4TB", "base": 899},
+    {"type": "hdd_usb", "brand": "东芝", "model": "Basics A3", "spec": "2TB", "zol_url": "https://detail.zol.com.cn/move_disk/index1241704.shtml", "base": 429},
     # ---- 台式机显示屏 ----
     {"type": "monitor", "brand": "AOC", "model": "24G2", "spec": "1080P 144Hz", "base": 799},
-    {"type": "monitor", "brand": "小米", "model": "G27Q", "spec": "2K 165Hz", "base": 1099},
-    {"type": "monitor", "brand": "LG", "model": "27GP850", "spec": "2K 180Hz", "base": 1899},
-    {"type": "monitor", "brand": "三星", "model": "S27A800", "spec": "4K 60Hz", "base": 2399},
+    {"type": "monitor", "brand": "小米", "model": "G27Q", "spec": "2K 165Hz", "zol_url": "https://detail.zol.com.cn/lcd/index1856216.shtml", "base": 1099},
+    {"type": "monitor", "brand": "LG", "model": "27GP850", "spec": "2K 180Hz", "zol_url": "https://detail.zol.com.cn/lcd/index1367477.shtml", "base": 1899},
+    {"type": "monitor", "brand": "三星", "model": "S27A800", "spec": "4K 60Hz", "zol_url": "https://detail.zol.com.cn/lcd/index1378086.shtml", "base": 2399},
     # ---- 键盘（有线/无线 × 薄膜/机械/磁轴） ----
     {"type": "keyboard", "brand": "罗技", "model": "G610", "spec": "有线机械", "base": 449},
     {"type": "keyboard", "brand": "罗技", "model": "G913", "spec": "无线机械", "base": 1299},
-    {"type": "keyboard", "brand": "达尔优", "model": "A98", "spec": "无线机械", "base": 399},
+    {"type": "keyboard", "brand": "狼蛛", "model": "F87 Pro", "spec": "无线机械", "zol_url": "https://detail.zol.com.cn/keyboard/index1969155.shtml", "base": 249},
     {"type": "keyboard", "brand": "雷蛇", "model": "黑寡妇V4", "spec": "有线机械", "base": 899},
-    {"type": "keyboard", "brand": "双飞燕", "model": "KB-8", "spec": "有线薄膜", "base": 59},
-    {"type": "keyboard", "brand": "ATK", "model": "68", "spec": "有线磁轴", "base": 599},
+    {"type": "keyboard", "brand": "双飞燕", "model": "KB-8", "spec": "有线薄膜", "zol_url": "https://detail.zol.com.cn/keyboard/index313149.shtml", "base": 59},
+    {"type": "keyboard", "brand": "洛斐", "model": "小顺 Flow", "spec": "68键线性轴", "zol_url": "https://detail.zol.com.cn/keyboard/index2147075.shtml", "base": 599},
     # ---- 鼠标（有线/无线/蓝牙） ----
     {"type": "mouse", "brand": "罗技", "model": "G102", "spec": "有线", "base": 99},
     {"type": "mouse", "brand": "罗技", "model": "G304", "spec": "无线", "base": 199},
     {"type": "mouse", "brand": "罗技", "model": "GPW 2", "spec": "无线", "base": 799},
     {"type": "mouse", "brand": "雷蛇", "model": "蝰蛇V3", "spec": "有线", "base": 299},
-    {"type": "mouse", "brand": "罗技", "model": "M185", "spec": "无线", "base": 69},
-    {"type": "mouse", "brand": "双飞燕", "model": "OP-520", "spec": "有线", "base": 39},
+    {"type": "mouse", "brand": "罗技", "model": "M185", "spec": "无线", "zol_url": "https://detail.zol.com.cn/Ergonomics_mouse/index287835.shtml", "base": 69},
+    {"type": "cpu", "brand": "Intel", "model": "i5-14600KF", "spec": "14核20线程", "zol_url": "https://detail.zol.com.cn/cpu/index1929615.shtml", "base": 1299},
+    {"type": "cpu", "brand": "AMD", "model": "R5 7500F", "spec": "6核12线程", "zol_url": "https://detail.zol.com.cn/cpu/index1796349.shtml", "base": 949},
+    {"type": "gpu", "brand": "NVIDIA", "model": "RTX 4070", "spec": "12GB", "zol_url": "https://detail.zol.com.cn/vga/index1981975.shtml", "base": 4099},
+    {"type": "gpu", "brand": "AMD", "model": "RX 7800 XT", "spec": "16GB", "zol_url": "https://detail.zol.com.cn/vga/index2041683.shtml", "base": 3399},
+    {"type": "mem_desktop", "brand": "金士顿", "model": "FURY 32GB", "spec": "DDR5 6000", "zol_url": "https://detail.zol.com.cn/memory/index1629095.shtml", "base": 849},
+    {"type": "mem_desktop", "brand": "芝奇", "model": "幻锋戟 32GB", "spec": "DDR5 6400", "zol_url": "https://detail.zol.com.cn/memory/index1985113.shtml", "base": 999},
+    {"type": "ssd", "brand": "三星", "model": "990 EVO Plus", "spec": "1TB", "zol_url": "https://detail.zol.com.cn/solid_state_drive/index2112238.shtml", "base": 799},
+    {"type": "ssd_usb", "brand": "三星", "model": "T9", "spec": "1TB", "zol_url": "https://detail.zol.com.cn/move_disk/index1924415.shtml", "base": 999},
+    {"type": "hdd_usb", "brand": "西数", "model": "Elements", "spec": "4TB", "zol_url": "https://detail.zol.com.cn/move_disk/index1253105.shtml", "base": 699},
+    {"type": "monitor", "brand": "HKC", "model": "IG27Q", "spec": "2K 165Hz", "zol_url": "https://detail.zol.com.cn/lcd/index1337857.shtml", "base": 899},
+    {"type": "monitor", "brand": "AOC", "model": "27G4", "spec": "1080P 180Hz", "zol_url": "https://detail.zol.com.cn/lcd/index1930210.shtml", "base": 799},
+    {"type": "mouse", "brand": "罗技", "model": "G502 HERO", "spec": "有线", "zol_url": "https://detail.zol.com.cn/Ergonomics_mouse/index1230541.shtml", "base": 249},
+    {"type": "mouse", "brand": "雷蛇", "model": "蝰蛇V2X", "spec": "无线", "zol_url": "https://detail.zol.com.cn/Ergonomics_mouse/index1394153.shtml", "base": 329},
+    {"type": "mouse", "brand": "双飞燕", "model": "OP-520", "spec": "有线", "zol_url": "https://detail.zol.com.cn/mice/index275884.shtml", "base": 39},
 ]
 
 # 硬件类目中文名（仅用于日志/报告展示）

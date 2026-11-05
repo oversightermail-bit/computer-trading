@@ -46,7 +46,8 @@
       legendHint.innerHTML = '共 ' + s.series.length + ' 条价格折线 · <b>点击图例</b>可显示/隐藏任意一条 · 滚轮或拖动缩放查看细节';
     }
 
-    /* 高性价比推荐表：性价比指数 = 性能分 ÷ 参考价 × 1000，按指数降序 */
+    /* 高性价比推荐表：性价比指数 = 性能分 ÷ ln(参考价) × 100（对数归一化），
+       按指数降序；无真实价显示"暂无数据"，绝不用模拟价填充 */
     var body = document.getElementById('recommendBody');
     if (!body) return;
     if (!s.recommend || !s.recommend.length) {
@@ -58,16 +59,26 @@
       var vb = b.valueIndex == null ? -1 : Number(b.valueIndex);
       return vb - va;
     });
+    var todayStr = UI.today();
     body.innerHTML = list.map(function (r, idx) {
-      var badge = idx < 2
-        ? '<span class="tag best">高性价比之选</span>'
-        : (idx < 5 ? '<span class="tag plain">值得关注</span>' : '<span class="tag plain">--</span>');
-      var perf = (r.perf != null && r.perf > 0) ? r.perf + '<span class="muted"> / 100</span>' : '--';
+      var badge = r.valueIndex == null
+        ? '<span class="tag plain">暂无数据</span>'
+        : (idx < 2
+          ? '<span class="tag best">高性价比之选</span>'
+          : (idx < 5 ? '<span class="tag plain">值得关注</span>' : '<span class="tag plain">--</span>'));
+      var perf = (r.perf != null && r.perf > 0)
+        ? '<span title="' + UI.esc(r.perfBasis || '性能分（基准自动映射）') + '">' + r.perf + '<span class="muted"> / 100</span></span>'
+        : '--';
+      var priceCell = (r.price == null)
+        ? '<span class="muted">暂无数据</span>'
+        : '<b class="price-strong">' + UI.money(r.price) + '</b>' +
+          (r.priceDate && r.priceDate !== todayStr
+            ? ' <span class="muted">(' + UI.esc(String(r.priceDate).slice(5)) + ' 采集)</span>' : '');
       var value = r.valueIndex != null
         ? '<b class="value-strong">' + Number(r.valueIndex).toFixed(1) + '</b>' : '--';
       return '<tr>' +
         '<td><strong>' + UI.esc(r.brand) + ' ' + UI.esc(r.model) + '</strong><i class="td-spec">' + UI.esc(r.spec) + '</i></td>' +
-        '<td><b class="price-strong">' + UI.money(r.price) + '</b></td>' +
+        '<td>' + priceCell + '</td>' +
         '<td>' + perf + '</td>' +
         '<td>' + value + '</td>' +
         '<td>' + badge + '</td>' +

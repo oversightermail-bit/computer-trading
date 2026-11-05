@@ -14,7 +14,7 @@
 ├── README.md
 ├── sql/
 │   ├── schema.sql                   # 全部 9 张表（含二手交易预留表 t_trade）
-│   ├── init_data.sql                # 演示数据：4 套餐 + 10 硬件类目 + 45 型号 + 3 平台 × 30 天价格时序
+│   ├── init_data.sql                # 演示数据：4 套餐 + 10 硬件类目 + 58 型号 + 中关村在线 × 30 天价格时序
 │   └── subscription_schema.sql      # 订阅模块独立脚本（3 表 + 4 套餐，可单独执行）
 ├── tools/
 │   └── gen_sample_data.py           # init_data.sql 生成器（价格随机游走、日期相对今天）
@@ -98,25 +98,26 @@ mvn spring-boot:run
 ## 五、AI 问答（F4）
 
 - 系统提示词强制"简短的大白话"，并注入网站近 3 日各硬件最低价 TOP3（含平台），回答经压缩（默认 500 字内）。
-- `app.ai.provider` 两种实现：
-  - `mock`（默认，零配置可跑）：本地规则引擎，支持预算解析（"预算6000打游戏"）、办公/游戏/生产力场景、硬件关键词对比（"RTX 4060 和 6750XT 对比"），全部使用数据库真实价格；
-  - `openai`：OpenAI 兼容协议（OpenAI/DeepSeek/通义等均可），配置 `app.ai.openai.base-url/api-key/model`；图片自动转多模态 messages 格式。
+- 大模型网关运行时路由（`ConfigLlmClient`，2026-11 起）：
+  - 管理员在「管理中心 → AI 对话端 API 接入」填写密钥、接口地址与模型名（**均无默认值**，任意 OpenAI 兼容网关如 DeepSeek/通义/Kimi），保存后即时生效，无需重启；
+  - 未配置密钥自动回落本地 Mock 演示模型（零配置可跑：预算解析、场景推荐、型号对比，全部使用数据库真实价格）；
+  - 云端走 OpenAI 兼容协议，图片自动转多模态 messages 格式。
 - 纯文本计 1 次、图片计 2 次；调用失败返还额度并返回业务码 `50201`。
 
-## 六、数据库设计（9 张表）
+## 六、数据库设计（10 张表）
 
-`t_user` 用户 ｜ `t_hardware` 硬件类目与文案 ｜ `t_product` 商品主数据 ｜ `t_price_history` 价格时序（爬虫写、后端读）｜ `t_trade` 二手交易（预留）｜ `t_ai_session` AI 会话 ｜ `t_subscription_plan` 套餐配置 ｜ `t_user_subscription` 用户订阅（含等级快照与数据库额度计数器）｜ `t_ai_quota_log` 额度流水。
+`t_user` 用户 ｜ `t_hardware` 硬件类目与文案 ｜ `t_product` 商品主数据（含 `perf_score/perf_basis/perf_updated` 基准性能分）｜ `t_price_history` 价格时序（含 `source` 列：real=真实采集 mock=模拟演示）｜ `t_trade` 二手交易（预留）｜ `t_ai_session` AI 会话 ｜ `t_subscription_plan` 套餐配置 ｜ `t_user_subscription` 用户订阅 ｜ `t_ai_quota_log` 额度流水 ｜ `t_app_config` 应用配置（AI 密钥等）。
 
-价格时序由 Python 爬虫子系统（`../爬虫`）持续写入；后端只负责聚合。折线图按"型号 × 日期"展示中关村在线参考报价；**高性价比推荐** = 性能分（`t_product.perf_score`，1-100 人工维护）÷ 参考价 × 1000 得出性价比指数，指数越大越划算，前端按指数降序展示并标注"高性价比之选"。
+价格时序由 Python 爬虫子系统（`../爬虫`）持续写入；后端只聚合 `source='real'` 的真实采集价（模拟演示数据绝不冒充真实价，采不到显示"暂无数据"）。**高性价比推荐** = 性能分（基准自动映射 1-100：PassMark CPU Mark / 3DMark Time Spy / 官方规格，依据与日期记录在 `perf_basis/perf_updated`）÷ ln(参考价) × 100 得出性价比指数（对数归一化，抑制"越便宜分越高"偏差），前端按指数降序展示并标注"高性价比之选"。
 
 ## 七、前端从 Mock 切换到真实后端
 
-前端目前是空白占位页，后续按《订阅模块本地开发实现指南》开发时，切换只需 4 步：
+前端已支持运行时切换（`assets/js/config.js` 的 `AppConfig.setMode`）：
 
-1. HTML 里把 `<script src="subscription-mock-api.js">` 换成 `subscription-service.js`；
-2. `subscription-service.js` 中 `API_BASE` 改为 `http://localhost:8080/api`（部署时改为正式域名）；
-3. 确认响应格式：后端已是 `{code, message, data}`，与 Mock 一致，无需改动业务代码；
-4. 登录后把 JWT 放入 `Authorization: Bearer <token>`，401 自动跳登录页，`code === 42901` 弹升级窗（后端已按此契约实现）。
+1. 默认 `API_MODE='real'`：全部用户（含游客）走真实后端，`API_BASE` 默认 `http://127.0.0.1:8080/api`（后端已全放行 CORS）；
+2. 内置演示账号 `demo`（后端同样存在，登录校验一致）登录成功后自动切换 `mock` 模式（本地演示数据），顶栏显示"演示模式"徽章；退出登录自动切回 `real`；
+3. 注册用户一律走真实后端，不进入 mock 模式；演示账号不在任何页面展示；
+4. 内置管理员 `Controler`（密码 `comtoapi`，启动时幂等创建），顶栏出现"管理"入口：启动爬虫、AI 密钥配置、用户删改。
 
 ## 八、配置速查（application.yml / application-subscription.yml）
 
@@ -124,13 +125,27 @@ mvn spring-boot:run
 |---|---|---|
 | spring.datasource.username/password | root/123456 | **改成你本机 MySQL 账号** |
 | app.jwt.secret | dev 默认值 | 生产必须换 >= 32 字节随机串 |
-| app.ai.provider | mock | mock / openai |
-| app.ai.openai.* | - | provider=openai 时填写 base-url/api-key/model |
+| app.ai.compress-max-chars / timeout-seconds | 500 / 30 | 回答压缩长度与调用超时 |
+| app.crawler.work-dir | ../爬虫 | 管理页"启动爬虫"的工作目录 |
+| app.crawler.command | python run.py once --mode real | 启动爬虫命令（只写真实采集价） |
 | app.quota.store | auto | auto / redis / db（额度计数器存储） |
 | app.subscribe.skip-payment | true | 比赛模式跳过支付；接支付后改 false |
 | app.subscribe.expire-check-cron | 每小时 | 到期回落免费级任务频率 |
 
-## 九、验证示例
+## 九、后端启动 / 重启脚本（Windows 与 Linux 服务器通用）
+
+项目根目录提供四个脚本（ASCII 文件名，Windows 双击 `.bat`，Linux 先 `chmod +x` 再 `./xxx.sh`）：
+
+| 脚本 | 用途 |
+|---|---|
+| `start-backend.bat` / `start-backend.sh` | 启动后端服务（自动定位 jar、自动找 Java：IDEA JBR → JAVA_HOME → PATH；端口占用检测；日志 `backend-runtime.log` / `后端/target/app.log`，Linux 另写 `app.pid`） |
+| `restart-backend.bat` / `restart-backend.sh` | 结束旧进程并重启（管理中心"重启后端服务"按钮调用，Windows/Linux 自动选择对应脚本） |
+
+管理中心"后端服务"卡片**仅根管理员 Controler 可见**（其余管理员 403），提供状态（PID/启动时间/运行时长/Java 版本）与"重启后端服务"按钮。后端未运行时管理页无法访问，此时直接运行启动脚本即可。
+
+服务器部署注意：安装 JDK 17+（或设置 `JAVA_HOME`）；8080 端口按需放行/反向代理；`app.jwt.secret` 必须更换为随机长字符串。
+
+## 十、验证示例
 
 一键冒烟测试（自动构建 → 启动 → 15+ 个接口断言 → 关闭）：
 

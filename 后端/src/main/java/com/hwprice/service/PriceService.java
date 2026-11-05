@@ -6,6 +6,7 @@ import com.hwprice.common.BizException;
 import com.hwprice.common.ErrorCode;
 import com.hwprice.config.AppProperties;
 import com.hwprice.entity.Hardware;
+import com.hwprice.entity.Product;
 import com.hwprice.mapper.HardwareMapper;
 import com.hwprice.mapper.PriceHistoryMapper;
 import com.hwprice.mapper.ProductMapper;
@@ -101,7 +102,9 @@ public class PriceService {
 
     /**
      * 价格时序（F3 折线图数据源）：
-     * 每个型号一条折线（当日参考价），并给出每型号的性能分与性价比指数。
+     * 每个型号一条折线（当日真实采集价），并给出每型号的性能分与性价比指数。
+     * 只聚合 source='real' 的真实采集价；采不到的型号折线断开、
+     * 推荐表显示"暂无数据"（绝不用模拟价冒充真实价）。
      */
     public PriceSeriesVO series(String type) {
         Hardware h = hardware(type);
@@ -112,39 +115,34 @@ public class PriceService {
         }
         LocalDate start = LocalDate.now().minusDays(SERIES_DAYS - 1L);
         List<PriceRow> rows = priceHistoryMapper.selectRowsByType(type, start);
+        List<Product> products = productMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Product>()
+                        .eq("hardware_type", type).orderByAsc("id"));
 
         PriceSeriesVO vo = new PriceSeriesVO();
         vo.setType(type);
         vo.setName(h.getName());
 
-        // 按商品分组，保持 id 顺序
-        Map<Long, List<PriceRow>> byProduct = rows.stream()
-                .collect(Collectors.groupingBy(PriceRow::getProductId, LinkedHashMap::new, Collectors.toList()));
-        if (byProduct.isEmpty()) {
-            vo.setDates(List.of());
-            vo.setSeries(List.of());
-            vo.setRecommend(List.of());
-            return vo;
-        }
-
-        // 横轴：数据中出现的日期
+        // 横轴：数据中出现的日期（无真实数据时为空数组，前端显示"暂无数据"）
         List<String> dates = rows.stream().map(r -> r.getDate().toString()).distinct().sorted().toList();
 
-        // 型号重名时补规格区分
+        // 型号重名时补规格区分（按目录全部型号统计，保证图例稳定）
         Map<String, Long> modelCount = new LinkedHashMap<>();
-        for (List<PriceRow> group : byProduct.values()) {
-            PriceRow first = group.get(0);
-            modelCount.merge(first.getModel(), 1L, Long::sum);
+        for (Product p : products) {
+            modelCount.merge(p.getModel(), 1L, Long::sum);
         }
+
+        // 按商品分组真实采集行
+        Map<Long, List<PriceRow>> byProduct = rows.stream()
+                .collect(Collectors.groupingBy(PriceRow::getProductId, LinkedHashMap::new, Collectors.toList()));
 
         List<PriceSeriesVO.Series> seriesList = new ArrayList<>();
         List<PriceSeriesVO.Recommend> recommendList = new ArrayList<>();
-        for (Map.Entry<Long, List<PriceRow>> entry : byProduct.entrySet()) {
-            List<PriceRow> group = entry.getValue();
-            PriceRow first = group.get(0);
-            String seriesName = modelCount.get(first.getModel()) > 1
-                    ? first.getBrand() + " " + first.getModel() + " " + first.getSpec()
-                    : first.getBrand() + " " + first.getModel();
+        for (Product product : products) {
+            List<PriceRow> group = byProduct.getOrDefault(product.getId(), List.of());
+            String seriesName = modelCount.get(product.getModel()) > 1
+                    ? product.getBrand() + " " + product.getModel() + " " + product.getSpec()
+                    : product.getBrand() + " " + product.getModel();
 
             // 日期 -> 当日价格列表
             Map<String, List<BigDecimal>> byDate = new TreeMap<>();
@@ -155,13 +153,13 @@ public class PriceService {
             for (String date : dates) {
                 List<BigDecimal> dayPrices = byDate.get(date);
                 if (dayPrices == null || dayPrices.isEmpty()) {
-                    data.add(null); // 缺口用 null，ECharts 折线断开
+                    data.add(null); // 缺口用 null，ECharts 折线断开（采不到不编造）
                 } else {
                     data.add(median(dayPrices));
                 }
             }
             seriesList.add(new PriceSeriesVO.Series(seriesName, data));
-            recommendList.add(buildRecommend(first, group));
+            recommendList.add(buildRecommend(product, group));
         }
         vo.setDates(dates);
         vo.setSeries(seriesList);
@@ -171,9 +169,9 @@ public class PriceService {
         return vo;
     }
 
-    /** 每型号当日参考价 + 性能分 → 高性价比指数（前端按指数降序展示推荐） */
-    private PriceSeriesVO.Recommend buildRecommend(PriceRow first, List<PriceRow> group) {
-        // 该型号最新采集日期
+    /** 每型号最新真实采集价 + 性能分 → 性价比指数（对数归一化，前端按指数降序展示推荐） */
+    private PriceSeriesVO.Recommend buildRecommend(Product product, List<PriceRow> group) {
+        // 该型号最新真实采集日期（采不到时 group 为空 → price/priceDate 为 null = 暂无数据）
         LocalDate latest = group.stream().map(PriceRow::getDate).max(Comparator.naturalOrder()).orElse(null);
         // 最新日期上各来源最低价（数据源为单平台时即该平台参考价）
         Map<String, BigDecimal> platformMin = new LinkedHashMap<>();
@@ -186,20 +184,26 @@ public class PriceService {
                 .sorted(Map.Entry.comparingByValue())
                 .toList();
         PriceSeriesVO.Recommend r = new PriceSeriesVO.Recommend();
-        r.setBrand(first.getBrand());
-        r.setModel(first.getModel());
-        r.setSpec(first.getSpec());
-        r.setPerf(first.getPerfScore());
+        r.setBrand(product.getBrand());
+        r.setModel(product.getModel());
+        r.setSpec(product.getSpec());
+        r.setPerf(product.getPerfScore());
+        r.setPerfBasis(product.getPerfBasis());
         if (!sorted.isEmpty()) {
             Map.Entry<String, BigDecimal> best = sorted.get(0);
             r.setPrice(best.getValue());
+            r.setPriceDate(latest);
         }
-        // 性价比指数 = 性能分 ÷ 参考价 × 1000（perf 未维护时为 null，前端不参与排序）
-        if (first.getPerfScore() != null && first.getPerfScore() > 0 && r.getPrice() != null
+        // 性价比指数 = 性能分 ÷ ln(参考价) × 100（对数归一化：
+        // 价格取对数后再做比值，抑制"越便宜分越高"的偏差；perf 未维护/无真实价时为 null）
+        if (product.getPerfScore() != null && product.getPerfScore() > 0 && r.getPrice() != null
                 && r.getPrice().compareTo(BigDecimal.ZERO) > 0) {
-            r.setValueIndex(BigDecimal.valueOf(first.getPerfScore())
-                    .multiply(BigDecimal.valueOf(1000))
-                    .divide(r.getPrice(), 2, RoundingMode.HALF_UP));
+            double lnPrice = Math.log(r.getPrice().doubleValue());
+            if (lnPrice > 0) {
+                r.setValueIndex(BigDecimal.valueOf(product.getPerfScore())
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(lnPrice), 2, RoundingMode.HALF_UP));
+            }
         }
         return r;
     }

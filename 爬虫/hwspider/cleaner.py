@@ -13,6 +13,7 @@ from typing import Dict, List
 
 import pandas as pd
 
+from . import config
 from .loader import catalog_by_sku
 
 # 价格文本里的货币符号 / 全角逗号
@@ -73,13 +74,25 @@ def clean(raw_items: List) -> pd.DataFrame:
     # 2) 缺失/非正值剔除
     df = df[df["price"].notna() & (df["price"] > 0)].copy()
 
-    # 3) SKU 唯一标识 + 异常抖动剔除（偏离基准价过大视为脏数据）。
-    #    区间放宽到 0.3~3.0：ZOL 参考报价对老型号可能仍标官方指导价，
-    #    与目录基准价（市价口径）差距可达 2 倍以上，属正常而非脏数据。
+    # 3) SKU 唯一标识 + 价格合理性校验（2026-11-05 收紧为基准价 ±30%）。
+    #    超出区间即视为错配 SKU / 过期指导价 / 异常促销价，直接丢弃：
+    #    当日不写入，后端聚合自动"沿用上一真实价"，完全采不到则"暂无数据"。
     df["sku"] = df["brand"].str.strip() + "|" + df["model"].str.strip() + "|" + df["spec"].str.strip()
     base_map: Dict[str, float] = {sku: it["base"] for sku, it in catalog_by_sku().items()}
     df["base"] = df["sku"].map(base_map)
-    df = df[df["base"].notna() & (df["price"] / df["base"]).between(0.3, 3.0)].copy()
+    ratio = df["price"] / df["base"]
+    ok = df["base"].notna() & ratio.between(config.PLAUSIBILITY["ratio_min"],
+                                             config.PLAUSIBILITY["ratio_max"])
+    rejected = df[df["base"].notna() & ~ok]
+    if len(rejected):
+        import logging
+        logging.getLogger("hwspider.cleaner").warning(
+            "合理性校验丢弃 %d 条（超出基准价 %.0f%%~%.0f%%），将沿用上一真实价：%s",
+            len(rejected), config.PLAUSIBILITY["ratio_min"] * 100,
+            config.PLAUSIBILITY["ratio_max"] * 100,
+            ", ".join("%s ¥%.0f/基准%.0f" % (r.sku, r.price, r.base)
+                      for r in list(rejected.itertuples())[:10]))
+    df = df[ok].copy()
 
     # 4) 同 SKU 同平台同一天多店铺报价 → 中位价（文档：中位数/最低价）
     df["date"] = pd.to_datetime(df["crawled_at"]).dt.date.astype(str)

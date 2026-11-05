@@ -57,8 +57,9 @@
       users[u.username] = u;
       writeUsers(users);
     }
-    /* 预置演示账号：demo / demo123（免费版） */
-    (function seedDemo() {
+    /* 预置演示账号：demo / demo123（免费版）；仅在进入 Mock 模式时生效，
+       网页上不展示账号信息，演示账号登录后由 login.js 自动切换到 Mock 模式 */
+    function seedDemo() {
       try {
         var users = readUsers();
         if (!users['demo']) {
@@ -70,7 +71,8 @@
           writeUsers(users);
         }
       } catch (e) {}
-    })();
+    }
+    seedDemo();
 
     /* ---- 数据派生 ---- */
     function productsOf(type) {
@@ -243,6 +245,8 @@
 
     /* ======================= 接口实现 ======================= */
     return {
+      /* 进入 Mock 模式时由登录流程调用：确保演示账号已预置 */
+      ensureDemo: function () { seedDemo(); },
       hardware: async function () {
         await delay(200);
         var list = [];
@@ -300,8 +304,11 @@
           recommend.push({
             brand: p.brand, model: p.model, spec: p.spec,
             price: price, perf: perf,
+            perfBasis: p.perfBasis || '',
+            priceDate: price != null ? UI.today() : null,
+            // 与后端同口径：性价比指数 = 性能分 ÷ ln(参考价) × 100（对数归一化）
             valueIndex: (perf > 0 && price != null && price > 0)
-              ? +(perf / price * 1000).toFixed(2) : null,
+              ? +(perf / Math.log(price) * 100).toFixed(2) : null,
           });
         });
         return ok({ type: type, name: HW.hardware[type].name, dates: dates30(), series: series, recommend: recommend });
@@ -490,6 +497,17 @@
       subscribe: function (planId) { return request('/auth/subscribe/order', { method: 'POST', body: JSON.stringify({ planId: planId }) }); },
       quotaLogs: function (page, size) { return request('/auth/quota/logs' + q({ page: page || 1, size: size || 20 })); },
       aiChat: function (payload) { return request('/auth/ai/chat', { method: 'POST', body: JSON.stringify(payload) }); },
+      /* ---- 管理员接口（仅 ROLE_ADMIN 可调） ---- */
+      crawlerStart: function () { return request('/auth/admin/crawler/start', { method: 'POST' }); },
+      crawlerStatus: function () { return request('/auth/admin/crawler/status'); },
+      aiConfig: function () { return request('/auth/admin/ai-config'); },
+      saveAiConfig: function (payload) { return request('/auth/admin/ai-config', { method: 'POST', body: JSON.stringify(payload) }); },
+      adminUsers: function () { return request('/auth/admin/users'); },
+      adminUpdateUser: function (id, payload) { return request('/auth/admin/users/' + id, { method: 'PUT', body: JSON.stringify(payload) }); },
+      adminDeleteUser: function (id) { return request('/auth/admin/users/' + id, { method: 'DELETE' }); },
+      /* ---- 后端服务管理（仅根管理员 Controler） ---- */
+      backendStatus: function () { return request('/auth/admin/backend/status'); },
+      backendRestart: function () { return request('/auth/admin/backend/restart', { method: 'POST' }); },
     };
   })();
 

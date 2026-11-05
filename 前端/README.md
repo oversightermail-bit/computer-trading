@@ -75,7 +75,7 @@ window.AppConfig = {
 };
 ```
 
-- `mock`：`api.js` 内置的 MockApi —— 数据与 `后端/sql/init_data.sql` 完全一致（10 类硬件、45 型号、3 平台 × 30 天价格、4 档套餐），本地 localStorage 模拟用户/登录/订阅/额度，AI 为本地规则应答（简短大白话）。
+- `mock`：`api.js` 内置的 MockApi —— 数据与 `后端/sql/init_data.sql` 完全一致（10 类硬件、58 型号、中关村在线 × 30 天价格、4 档套餐），本地 localStorage 模拟用户/登录/订阅/额度，AI 为本地规则应答（简短大白话）。
 - `real`：fetch 调用 Java 后端 REST 接口，自动携带 JWT；HTTP 401 自动跳登录页。切换后前端业务代码**零改动**。
 
 后端接口契约（统一响应 `{code, message, data}`，code=0 成功；42901 额度用尽 → 升级弹窗）：

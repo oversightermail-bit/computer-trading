@@ -4,13 +4,25 @@
 价格用固定种子的随机游走生成（可复现）；日期使用 CURDATE() 相对表达式，
 保证任何时候导入，折线图都有"最近 30 天"的新鲜数据。
 
+口径说明（2026-11-05 起）：init_data.sql 中的价格是**模拟演示数据**，
+入库时 source='mock'，后端聚合只读 source='real'（真实采集），
+模拟价绝不会冒充真实价；前端 Mock 演示模式（data.js）与其同源。
+性能分（perf_score/perf_basis/perf_updated）来自项目根 perf_benchmarks.json
+（PassMark / 3DMark / 官方规格自动映射 1-100，单一数据源）。
+
 用法：python tools/gen_sample_data.py
 """
+import json
 import os
 import random
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(BASE, "sql", "init_data.sql")
+
+# 性能分基准（与 爬虫/tools/migrate_quality.py 共用同一文件，避免口径漂移）
+ROOT = os.path.dirname(BASE)
+BENCH = json.load(open(os.path.join(ROOT, "perf_benchmarks.json"), encoding="utf-8"))
+BENCH_BY_SKU = {it["sku"]: it for it in BENCH["items"]}
 
 # 2026-11 起主数据源为中关村在线（ZOL）参考报价（真实爬虫写同一平台名）
 PLATFORMS = ["中关村在线"]
@@ -61,9 +73,10 @@ HARDWARE = [
      "回报率不是越高越好（耗电）；对称/人体工学模具手感因人而异；无线鼠标注意接收器收纳。"),
 ]
 
-# 商品主数据：(hardware_type, brand, model, spec, base_price, perf_score)
-# perf_score 为性能分（1-100，同类目内相对性能，人工维护），用于"高性价比推荐"
-# （性价比指数 = 性能分 ÷ 参考价 × 1000，越大越划算）。
+# 商品主数据：(hardware_type, brand, model, spec, base_price, _perf_deprecated)
+# 性能分不再取第 6 元组值（旧人工分已废弃），统一取 perf_benchmarks.json 的
+# 基准映射分（PassMark / 3DMark / 官方规格 → 1-100，记录依据与日期）。
+# 性价比指数 = 性能分 ÷ ln(参考价) × 100（对数归一化，抑制"越便宜分越高"偏差）。
 PRODUCTS = [
     ("cpu", "Intel", "i5-12400F", "6核12线程", 749, 55),
     ("cpu", "Intel", "i5-13490F", "10核16线程", 1099, 62),
@@ -82,33 +95,46 @@ PRODUCTS = [
     ("mem_desktop", "光威", "天策 16GB", "DDR4 3200", 199, 48),
     ("mem_laptop", "三星", "16GB", "DDR4 3200", 269, 52),
     ("mem_laptop", "英睿达", "16GB", "DDR5 4800", 349, 50),
-    ("mem_laptop", "三星", "32GB", "DDR5 5600", 799, 75),
+    ("mem_laptop", "英睿达", "32GB", "DDR5 5600", 899, 80),
     ("ssd", "三星", "990 PRO", "1TB", 729, 85),
     ("ssd", "三星", "990 PRO", "2TB", 1299, 88),
     ("ssd", "致态", "TiPlus7100", "1TB", 549, 78),
     ("ssd", "铠侠", "RC20", "1TB", 429, 55),
-    ("ssd", "西部数据", "SN770", "1TB", 529, 62),
+    ("ssd", "金士顿", "KC3000", "1TB", 599, 80),
     ("ssd_usb", "闪迪", "E61", "1TB", 699, 70),
     ("ssd_usb", "三星", "T7", "1TB", 749, 72),
     ("ssd_usb", "致态", "移动固态", "1TB", 599, 68),
     ("hdd_usb", "西数", "Elements", "2TB", 499, 55),
     ("hdd_usb", "希捷", "睿品", "2TB", 529, 58),
-    ("hdd_usb", "东芝", "新小黑", "4TB", 899, 65),
+    ("hdd_usb", "东芝", "Basics A3", "2TB", 429, 50),
     ("monitor", "AOC", "24G2", "1080P 144Hz", 799, 50),
     ("monitor", "小米", "G27Q", "2K 165Hz", 1099, 68),
     ("monitor", "LG", "27GP850", "2K 180Hz", 1899, 78),
     ("monitor", "三星", "S27A800", "4K 60Hz", 2399, 72),
     ("keyboard", "罗技", "G610", "有线机械", 449, 55),
     ("keyboard", "罗技", "G913", "无线机械", 1299, 75),
-    ("keyboard", "达尔优", "A98", "无线机械", 399, 60),
+    ("keyboard", "狼蛛", "F87 Pro", "无线机械", 249, 58),
     ("keyboard", "雷蛇", "黑寡妇V4", "有线机械", 899, 72),
     ("keyboard", "双飞燕", "KB-8", "有线薄膜", 59, 25),
-    ("keyboard", "ATK", "68", "有线磁轴", 599, 65),
+    ("keyboard", "洛斐", "小顺 Flow", "68键线性轴", 599, 60),
     ("mouse", "罗技", "G102", "有线", 99, 55),
     ("mouse", "罗技", "G304", "无线", 199, 60),
     ("mouse", "罗技", "GPW 2", "无线", 799, 85),
     ("mouse", "雷蛇", "蝰蛇V3", "有线", 299, 78),
     ("mouse", "罗技", "M185", "无线", 69, 30),
+    ("cpu", "Intel", "i5-14600KF", "14核20线程", 1299, 70),
+    ("cpu", "AMD", "R5 7500F", "6核12线程", 949, 62),
+    ("gpu", "NVIDIA", "RTX 4070", "12GB", 4099, 75),
+    ("gpu", "AMD", "RX 7800 XT", "16GB", 3399, 78),
+    ("mem_desktop", "金士顿", "FURY 32GB", "DDR5 6000", 849, 80),
+    ("mem_desktop", "芝奇", "幻锋戟 32GB", "DDR5 6400", 999, 82),
+    ("ssd", "三星", "990 EVO Plus", "1TB", 799, 78),
+    ("ssd_usb", "三星", "T9", "1TB", 999, 80),
+    ("hdd_usb", "西数", "Elements", "4TB", 699, 68),
+    ("monitor", "HKC", "IG27Q", "2K 165Hz", 899, 62),
+    ("monitor", "AOC", "27G4", "1080P 180Hz", 799, 58),
+    ("mouse", "罗技", "G502 HERO", "有线", 249, 68),
+    ("mouse", "雷蛇", "蝰蛇V2X", "无线", 329, 72),
     ("mouse", "双飞燕", "OP-520", "有线", 39, 25),
 ]
 
@@ -122,6 +148,15 @@ PLANS = [
 
 def esc(s: str) -> str:
     return s.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def bench_for(brand: str, model: str, spec: str) -> tuple:
+    """从 perf_benchmarks.json 取 (score, perf_basis, perf_updated)。"""
+    sku = "%s|%s|%s" % (brand, model, spec)
+    item = BENCH_BY_SKU.get(sku)
+    if item is None:
+        return (0, "基准缺失", "2026-01-01")
+    return item["score"], item["basis"], item["updated"]
 
 
 def price_series(seed: int, base: float) -> list:
@@ -168,18 +203,22 @@ def main() -> None:
     w("")
 
     # 商品主数据
-    w("-- 商品/型号主数据（固定 id 1-%d，perf_score 为性能分，用于高性价比推荐）" % len(PRODUCTS))
-    w("INSERT INTO t_product (id, hardware_type, brand, model, spec, perf_score) VALUES")
+    w("-- 商品/型号主数据（固定 id 1-%d，perf_score/perf_basis/perf_updated 来自 perf_benchmarks.json）" % len(PRODUCTS))
+    w("INSERT INTO t_product (id, hardware_type, brand, model, spec, perf_score, perf_basis, perf_updated) VALUES")
     prod_rows = ",\n".join(
-        "(%d, '%s', '%s', '%s', '%s', %d)" % (i + 1, esc(p[0]), esc(p[1]), esc(p[2]), esc(p[3]), p[5])
+        "(%d, '%s', '%s', '%s', '%s', %d, '%s', '%s')" % (
+            i + 1, esc(p[0]), esc(p[1]), esc(p[2]), esc(p[3]),
+            bench_for(p[1], p[2], p[3])[0], esc(bench_for(p[1], p[2], p[3])[1]),
+            bench_for(p[1], p[2], p[3])[2])
         for i, p in enumerate(PRODUCTS)
     )
     w(prod_rows + ";")
     w("")
 
-    # 价格时序：每商品 × 1 平台 × 30 天
-    w("-- 价格时序：每个商品 1 平台 × 30 天，日期 = CURDATE() - INTERVAL n DAY")
-    w("INSERT INTO t_price_history (product_id, platform, price, date) VALUES")
+    # 价格时序：每商品 × 1 平台 × 30 天（source='mock' 模拟演示数据）
+    w("-- 价格时序：每个商品 1 平台 × 30 天（模拟演示数据 source='mock'，后端聚合只读 source='real'）")
+    w("-- 日期 = CURDATE() - INTERVAL n DAY")
+    w("INSERT INTO t_price_history (product_id, platform, price, date, source) VALUES")
     rows = []
     for i, p in enumerate(PRODUCTS):
         product_id = i + 1
@@ -189,7 +228,7 @@ def main() -> None:
             series = price_series(product_id * 31 + pi * 7, start)
             for n, price in enumerate(series):  # n=0 -> 29 天前；n=29 -> 今天
                 ago = DAYS - 1 - n
-                rows.append("(%d, '%s', %.2f, CURDATE() - INTERVAL %d DAY)" % (product_id, platform, price, ago))
+                rows.append("(%d, '%s', %.2f, CURDATE() - INTERVAL %d DAY, 'mock')" % (product_id, platform, price, ago))
     # 每 1500 行一个 INSERT 语句，避免包过大
     CHUNK = 1500
     for c in range(0, len(rows), CHUNK):
