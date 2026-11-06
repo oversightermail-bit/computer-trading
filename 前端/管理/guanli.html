@@ -57,6 +57,12 @@
         <button class="btn btn-primary btn-lg" id="crawlBtn">▶ 启动爬虫</button>
         <span class="crawler-state" id="crawlerState">状态加载中…</span>
       </div>
+      <div class="crawler-row" id="crawlerScheduleRow">
+        <button class="btn btn-ghost btn-lg" style="border-color:#0e7490;color:#0e7490" id="crawlerScheduleBtn">🕐 开启定时抓取（每日 08/12/18/22 点）</button>
+        <button class="btn btn-ghost btn-lg" style="border-color:#dc2626;color:#dc2626;display:none" id="crawlerScheduleStopBtn">⏹ 停止定时抓取</button>
+        <span class="crawler-state" id="crawlerScheduleState">--</span>
+      </div>
+      <div id="crawlerScheduleHint">定时抓取适合服务器长期运行：开启后进程常驻，每日 08:00 / 12:00 / 18:00 / 22:00 各抓一轮；重启后端后需重新开启。单轮"启动爬虫"与定时抓取互不影响。</div>
       <div class="stat-grid" id="crawlerStats">
         <div class="stat"><div class="stat-num" id="stTime">--</div><div class="stat-label">最近一轮</div></div>
         <div class="stat"><div class="stat-num" id="stParsed">--</div><div class="stat-label">解析条数</div></div>
@@ -66,28 +72,48 @@
       </div>
     </div>
 
-    <!-- ===== AI API 配置 ===== -->
+    <!-- ===== AI API 配置（免费 / 付费两档分开管理） ===== -->
     <div class="card">
       <div class="card-title">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z"/></svg>
-        AI 对话端 API 接入
-        <span class="sub">无任何默认地址：密钥、接口地址、模型名均由你填写，保存后即时生效；密钥留空 = 清空并回落本地演示模型</span>
+        AI 对话端 API 接入（免费 / 付费分开）
+        <span class="sub">免费账户与付费账户各用一套 API，分别保存、即时生效；某档密钥留空 = 该档回落本地演示模型。无任何默认地址：填写密钥时接口地址与模型名必填。</span>
       </div>
       <div class="ai-form">
-        <div class="field">
-          <label>API 密钥（必填）</label>
-          <input class="input" id="aiKey" type="password" placeholder="sk-..." autocomplete="off">
-          <div class="hint" id="aiKeyHint">当前：未配置（使用本地演示模型）</div>
+        <div class="ai-tier">
+          <h4 class="ai-tier-title">免费账户 API<span class="ai-tier-tag">FREE</span></h4>
+          <div class="field">
+            <label>API 密钥（留空 = 免费账户使用本地演示模型）</label>
+            <input class="input" id="aiFreeKey" type="password" placeholder="sk-..." autocomplete="off">
+            <div class="hint" id="aiFreeHint">当前：未配置（使用本地演示模型）</div>
+          </div>
+          <div class="field">
+            <label>接口地址（填写密钥时必填，无默认地址）</label>
+            <input class="input" id="aiFreeBase" type="text" placeholder="OpenAI 兼容网关地址，如 DeepSeek/通义/Kimi 的 v1 地址" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>模型名（填写密钥时必填，无默认模型）</label>
+            <input class="input" id="aiFreeModel" type="text" placeholder="如 deepseek-chat / qwen-plus / glm-4 ..." autocomplete="off">
+          </div>
+          <button class="btn btn-primary" id="aiFreeSaveBtn">保存免费账户 API</button>
         </div>
-        <div class="field">
-          <label>接口地址（填写密钥时必填，无默认地址）</label>
-          <input class="input" id="aiBase" type="text" placeholder="OpenAI 兼容网关地址，如 DeepSeek/通义/Kimi 的 v1 地址" autocomplete="off">
+        <div class="ai-tier">
+          <h4 class="ai-tier-title">付费账户 API<span class="ai-tier-tag">PAID</span></h4>
+          <div class="field">
+            <label>API 密钥（留空 = 付费账户使用本地演示模型）</label>
+            <input class="input" id="aiPaidKey" type="password" placeholder="sk-..." autocomplete="off">
+            <div class="hint" id="aiPaidHint">当前：未配置（使用本地演示模型）</div>
+          </div>
+          <div class="field">
+            <label>接口地址（填写密钥时必填，无默认地址）</label>
+            <input class="input" id="aiPaidBase" type="text" placeholder="OpenAI 兼容网关地址，如 DeepSeek/通义/Kimi 的 v1 地址" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>模型名（填写密钥时必填，无默认模型）</label>
+            <input class="input" id="aiPaidModel" type="text" placeholder="如 deepseek-chat / qwen-plus / glm-4 ..." autocomplete="off">
+          </div>
+          <button class="btn btn-primary" id="aiPaidSaveBtn">保存付费账户 API</button>
         </div>
-        <div class="field">
-          <label>模型名（填写密钥时必填，无默认模型）</label>
-          <input class="input" id="aiModel" type="text" placeholder="如 deepseek-chat / qwen-plus / glm-4 ..." autocomplete="off">
-        </div>
-        <button class="btn btn-primary" id="aiSaveBtn">保存配置</button>
       </div>
     </div>
 

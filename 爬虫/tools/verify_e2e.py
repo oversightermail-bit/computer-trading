@@ -19,10 +19,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hwspider import engine, monitor  # noqa: E402
+from dbconn import password  # noqa: E402
 
 MYSQL = r"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
 TEST_DB = "hw_price_crawl_test"
-USER, PWD = "root", "123456"
+USER = "root"
 LOGS = Path(__file__).resolve().parent.parent / "logs"
 
 DDL = """
@@ -46,7 +47,7 @@ CREATE TABLE t_price_history (
 
 
 def mysql(sql_text: str, use_db: bool = True, input_file: str = None):
-    cmd = [MYSQL, "--user=" + USER, "--password=" + PWD, "--host=127.0.0.1",
+    cmd = [MYSQL, "--user=" + USER, "--password=" + password(), "--host=127.0.0.1",
            "--default-character-set=utf8mb4", "--batch", "--skip-column-names"]
     if input_file:
         with open(input_file, "rb") as f:

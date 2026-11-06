@@ -2571,7 +2571,7 @@ window.HW_DATA = {
       "planName": "免费版",
       "priceMonth": 0.0,
       "quotaDay": 3,
-      "quotaMonth": 60,
+      "quotaMonth": 15,
       "multimodal": false,
       "description": 1
     },
@@ -2579,8 +2579,8 @@ window.HW_DATA = {
       "id": 2,
       "planName": "基础版",
       "priceMonth": 9.9,
-      "quotaDay": 20,
-      "quotaMonth": 400,
+      "quotaDay": 0,
+      "quotaMonth": 100,
       "multimodal": true,
       "description": 2
     },
@@ -2588,8 +2588,8 @@ window.HW_DATA = {
       "id": 3,
       "planName": "专业版",
       "priceMonth": 29.9,
-      "quotaDay": 80,
-      "quotaMonth": 1500,
+      "quotaDay": 0,
+      "quotaMonth": 300,
       "multimodal": true,
       "description": 3
     },
@@ -2597,8 +2597,8 @@ window.HW_DATA = {
       "id": 4,
       "planName": "旗舰版",
       "priceMonth": 69.9,
-      "quotaDay": 200,
-      "quotaMonth": 4000,
+      "quotaDay": 0,
+      "quotaMonth": 600,
       "multimodal": true,
       "description": 4
     }

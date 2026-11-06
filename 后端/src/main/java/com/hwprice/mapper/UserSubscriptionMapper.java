@@ -27,7 +27,7 @@ public interface UserSubscriptionMapper extends BaseMapper<UserSubscription> {
             "month_used = IF(month_key = #{monthKey}, month_used + #{cost}, #{cost}), " +
             "month_key = #{monthKey} " +
             "WHERE id = #{id} AND status = 1 " +
-            "AND (IF(day_key = #{dayKey}, day_used, 0) + #{cost} <= #{quotaDay}) " +
+            "AND (#{quotaDay} <= 0 OR (IF(day_key = #{dayKey}, day_used, 0) + #{cost} <= #{quotaDay})) " +
             "AND (IF(month_key = #{monthKey}, month_used, 0) + #{cost} <= #{quotaMonth})")
     int tryOccupy(@Param("id") Long subscriptionId,
                   @Param("dayKey") String dayKey,

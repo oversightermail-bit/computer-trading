@@ -41,6 +41,7 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final BodyCacheFilter bodyCacheFilter;
     private final ObjectMapper objectMapper;
+    private final AppProperties properties;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -72,11 +73,19 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /** 开发期全放行 CORS，生产可收紧为具体域名 */
+    /** CORS：默认开发期全放行（file:// 本地演示需要）；设置 CORS_ALLOWED_ORIGINS 后按白名单收紧 */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        List<String> origins = properties.getSecurity().getCorsAllowedOrigins() == null
+                ? List.of()
+                : properties.getSecurity().getCorsAllowedOrigins().stream()
+                        .filter(s -> s != null && !s.isBlank()).toList();
+        if (origins.isEmpty()) {
+            config.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            config.setAllowedOriginPatterns(origins);
+        }
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(false);

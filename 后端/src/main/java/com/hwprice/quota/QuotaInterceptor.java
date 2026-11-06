@@ -57,6 +57,15 @@ public class QuotaInterceptor implements HandlerInterceptor {
             writeJson(response, HttpStatus.BAD_REQUEST.value(), Result.fail(ErrorCode.PARAM_ERROR, "提问内容不能为空"));
             return false;
         }
+        // 长度校验前置：超长内容/图片在扣额度之前拒绝（与 @Size 校验一致，避免白扣额度）
+        if (content.length() > 2000) {
+            writeJson(response, HttpStatus.BAD_REQUEST.value(), Result.fail(ErrorCode.PARAM_ERROR, "提问内容过长（最多 2000 字）"));
+            return false;
+        }
+        if (imageUrl != null && imageUrl.length() > 2_000_000) {
+            writeJson(response, HttpStatus.BAD_REQUEST.value(), Result.fail(ErrorCode.PARAM_ERROR, "图片数据过大"));
+            return false;
+        }
 
         QuotaContext ctx = subscriptionService.current(user.getUserId());
 

@@ -13,12 +13,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 爬虫控制服务（管理页"启动爬虫"按钮）：
+ * 爬虫控制服务（管理页"启动爬虫" / "开启定时抓取"按钮）：
  * <ul>
  *   <li>start()：以后台子进程执行 app.crawler.command（默认 python run.py once --mode real），
  *       只写真实采集价；同一时刻只允许一轮，重复点击返回"正在运行"；</li>
+ *   <li>startSchedule()：执行 app.crawler.schedule-command（默认 python run.py schedule --mode real），
+ *       常驻调度进程，每日 08/12/18/22 点各抓一轮（服务器长期运行用），
+ *       stopSchedule() 可停止该进程；</li>
  *   <li>status()：读取 爬虫/logs/crawl_stats.jsonl 最近一轮统计（成功率/写入数/
- *       沿用上一真实价/暂无数据），并报告子进程是否仍在运行。</li>
+ *       沿用上一真实价/暂无数据），并报告单轮子进程与调度进程是否仍在运行。</li>
  * </ul>
  */
 @Slf4j
@@ -29,6 +32,7 @@ public class CrawlerService {
     private final ObjectMapper objectMapper;
 
     private volatile Process running;
+    private volatile Process scheduled;
 
     public CrawlerService(AppProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
@@ -78,17 +82,74 @@ public class CrawlerService {
         }
     }
 
-    /** 最近一轮统计 + 运行状态 */
+    /** 最近一轮统计 + 运行状态（单轮爬虫 + 定时调度进程） */
     public Map<String, Object> status() {
         Map<String, Object> out = new java.util.LinkedHashMap<>();
         boolean alive = running != null && running.isAlive();
         if (!alive) {
             running = null;
         }
+        boolean scheduleAlive = scheduled != null && scheduled.isAlive();
+        if (!scheduleAlive) {
+            scheduled = null;
+        }
         out.put("running", alive);
+        out.put("scheduleRunning", scheduleAlive);
         out.put("lastRound", lastRound());
         out.put("workDir", crawlerDir().toString());
         return out;
+    }
+
+    /**
+     * 开启定时抓取：常驻调度进程，每日 08/12/18/22 点各抓一轮（服务器长期运行用）。
+     * 与单轮爬虫互不阻塞；后端重启后调度进程随之退出，需在管理页重新开启。
+     */
+    public synchronized Map<String, Object> startSchedule() {
+        if (scheduled != null && scheduled.isAlive()) {
+            return Map.of("started", false, "message", "定时抓取已在运行中（每日 08/12/18/22 点）");
+        }
+        String command = properties.getCrawler().getScheduleCommand();
+        List<String> cmd = List.of(command.trim().split("\\s+"));
+        Path workDir = crawlerDir();
+        Path logFile = workDir.resolve("logs").resolve("admin_schedule.log");
+        try {
+            Files.createDirectories(logFile.getParent());
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.directory(workDir.toFile());
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
+            Process process = pb.start();
+            scheduled = process;
+            log.info("管理页开启定时抓取: {}（工作目录 {}，日志 {}）", command, workDir, logFile);
+            return Map.of("started", true,
+                    "message", "定时抓取已开启：每日 08:00 / 12:00 / 18:00 / 22:00 自动抓取（服务器常驻，重启后端后需重新开启）",
+                    "logFile", logFile.toString());
+        } catch (IOException e) {
+            log.error("开启定时抓取失败", e);
+            return Map.of("started", false, "message", "开启失败：" + e.getMessage());
+        }
+    }
+
+    /** 停止定时抓取调度进程 */
+    public synchronized Map<String, Object> stopSchedule() {
+        Process p = scheduled;
+        if (p == null || !p.isAlive()) {
+            scheduled = null;
+            return Map.of("stopped", false, "message", "定时抓取未在运行");
+        }
+        p.destroy();
+        try {
+            if (!p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+                p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            p.destroyForcibly();
+        }
+        scheduled = null;
+        log.info("管理页停止定时抓取");
+        return Map.of("stopped", true, "message", "定时抓取已停止");
     }
 
     private Map<String, Object> lastRound() {

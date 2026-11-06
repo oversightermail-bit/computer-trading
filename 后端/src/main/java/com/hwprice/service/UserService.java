@@ -87,7 +87,9 @@ public class UserService {
         vo.setPlanId(ctx.getPlanId());
         vo.setDayUsed(used[0]);
         vo.setDayTotal(ctx.getQuotaDay());
-        vo.setDayRemain(Math.max(ctx.getQuotaDay() - used[0], 0));
+        // quota_day = 0 表示每日不限（付费方案只限每月次数）
+        vo.setDayUnlimited(ctx.getQuotaDay() <= 0);
+        vo.setDayRemain(ctx.getQuotaDay() <= 0 ? 0 : Math.max(ctx.getQuotaDay() - used[0], 0));
         vo.setMonthUsed(used[1]);
         vo.setMonthTotal(ctx.getQuotaMonth());
         vo.setMonthRemain(Math.max(ctx.getQuotaMonth() - used[1], 0));

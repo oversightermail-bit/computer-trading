@@ -81,7 +81,7 @@ public class GlobalExceptionHandler {
             case 40101 -> HttpStatus.UNAUTHORIZED.value();
             case 40301 -> HttpStatus.FORBIDDEN.value();
             case 40401 -> HttpStatus.NOT_FOUND.value();
-            case 42901 -> HttpStatus.TOO_MANY_REQUESTS.value();
+            case 42901, 42902 -> HttpStatus.TOO_MANY_REQUESTS.value();
             default -> code >= 50000 ? HttpStatus.INTERNAL_SERVER_ERROR.value()
                     : HttpStatus.OK.value();
         };

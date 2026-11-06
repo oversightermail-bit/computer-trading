@@ -10,6 +10,11 @@ __pycache__/
 后端/target/
 后端/*.jar
 
+# ===== 本地密钥（数据库密码 / JWT 密钥，不入库） =====
+backend-env.bat
+backend-env.sh
+爬虫/.dbsecret
+
 # ===== 运行日志 / 临时输出 =====
 爬虫/logs/
 *.log

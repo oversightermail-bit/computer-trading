@@ -37,6 +37,7 @@ public class AiService {
     private final PriceService priceService;
     private final QuotaService quotaService;
     private final SubscriptionService subscriptionService;
+    private final PlanService planService;
     private final AiSessionMapper aiSessionMapper;
     private final AppProperties properties;
 
@@ -49,6 +50,10 @@ public class AiService {
      */
     public AiChatVO chat(Long userId, AiChatReq req, int cost) {
         QuotaContext ctx = subscriptionService.current(userId);
+        // 免费/付费分档路由：按套餐判定（非免费套餐 = 付费档）。
+        // 注意不能用到期时间判定：演示账号/根管理员的付费方案到期豁免（到期时间为空）
+        boolean paid = ctx.getPlanId() != null
+                && !ctx.getPlanId().equals(planService.freePlan().getId());
         Long sessionId = null;
         try {
             String priceContext = priceService.recommendOverview();
@@ -56,7 +61,7 @@ public class AiService {
                 priceContext = "（价格数据暂未采集，请先运行爬虫子系统）";
             }
             String systemPrompt = String.format(SYSTEM_PROMPT_TEMPLATE, priceContext);
-            String rawAnswer = llmClient.chat(systemPrompt, req.getContent(), blankToNull(req.getImageUrl()));
+            String rawAnswer = llmClient.chat(systemPrompt, req.getContent(), blankToNull(req.getImageUrl()), paid);
             String answer = compress(rawAnswer);
 
             // 会话落库
@@ -78,7 +83,8 @@ public class AiService {
             vo.setAnswer(answer);
             vo.setCost(cost);
             vo.setSessionId(sessionId);
-            vo.setDayRemain(Math.max(ctx.getQuotaDay() - used[0], 0));
+            vo.setDayUnlimited(ctx.getQuotaDay() <= 0);
+            vo.setDayRemain(ctx.getQuotaDay() <= 0 ? 0 : Math.max(ctx.getQuotaDay() - used[0], 0));
             vo.setMonthRemain(Math.max(ctx.getQuotaMonth() - used[1], 0));
             return vo;
         } catch (BizException e) {

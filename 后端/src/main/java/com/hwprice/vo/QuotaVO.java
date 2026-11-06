@@ -23,6 +23,9 @@ public class QuotaVO {
     private long dayTotal;
     private long dayRemain;
 
+    /** 每日不限（quota_day=0 的付费方案）：前端只展示月额度 */
+    private boolean dayUnlimited;
+
     /** 月维度 */
     private long monthUsed;
     private long monthTotal;

@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  * 本地内置演示模型：
  * 无需外网与密钥，基于网站真实价格数据用规则生成"简短大白话"推荐，
  * 用于比赛演示与无 LLM 环境的本地开发调试。
- * 由 ConfigLlmClient 在"未配置 API 密钥"时路由到本实现。
+ * 由 ConfigLlmClient 在该档（免费/付费）"未配置 API 密钥"时路由到本实现。
  */
 @Slf4j
 @Component
@@ -26,7 +26,7 @@ public class MockLlmClient implements LlmClient {
     private final PriceService priceService;
 
     @Override
-    public String chat(String systemPrompt, String userText, String imageUrl) {
+    public String chat(String systemPrompt, String userText, String imageUrl, boolean paid) {
         // 图片问答：演示模式未接入视觉模型
         if (imageUrl != null && !imageUrl.isBlank()) {
             return "（本地演示模式）已收到你的图片。当前后端运行在 Mock 模型下，还没接入多模态视觉识别；"

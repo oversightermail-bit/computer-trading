@@ -140,7 +140,8 @@ python run.py schedule
   该 SKU 当日无数据，属正常（页面显示"暂无数据"，后端沿用上一真实价）；
   可在 `config.CATALOG` 给该条目加 `"zol_url"` 手动指定型号页。
 - **连接数据库失败**：核对 `config.DATABASE` 与后端 `application.yml` 一致
-  （默认 root/123456@127.0.0.1:3306/hw_price）。
+  （127.0.0.1:3306/hw_price）；密码不入库——优先读环境变量 `HW_DB_PASSWORD`，
+  否则读 `爬虫/.dbsecret`（已 gitignore），首次部署在该文件写入本机 MySQL 密码即可。
 - **回填后折线没变化**：`backfill` 写入的是 `source='mock'` 演示数据，
   后端只聚合 `source='real'`，因此回填不会出现在真实页面；要真实历史只能
   靠每日多次真实采集持续积累。首次部署可执行 `tools/migrate_quality.py`

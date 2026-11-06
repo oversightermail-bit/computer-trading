@@ -20,8 +20,8 @@ import java.time.Duration;
  * 文本走标准 messages，图片走多模态 content 数组格式。
  *
  * 运行时配置来自 AiConfigService（管理员页面配置，存 t_app_config）：
- * 密钥、接口地址与模型名均由管理员填写，**没有任何默认地址**；
- * 未配置密钥时由 ConfigLlmClient 直接回落本地 Mock 演示模型。
+ * 免费 / 付费两档密钥、接口地址与模型名均由管理员**分别填写**，**没有任何默认地址**；
+ * 某档未配置密钥时由 ConfigLlmClient 仅将该档回落本地 Mock 演示模型。
  */
 @Slf4j
 @Component
@@ -50,8 +50,8 @@ public class OpenAiCompatLlmClient implements LlmClient {
     }
 
     @Override
-    public String chat(String systemPrompt, String userText, String imageUrl) {
-        AiConfigService.Snapshot conf = aiConfigService.current();
+    public String chat(String systemPrompt, String userText, String imageUrl, boolean paid) {
+        AiConfigService.Snapshot conf = aiConfigService.current(paid);
         if (conf.apiKey() == null || conf.apiKey().isBlank()) {
             throw new IllegalStateException("未配置 AI API 密钥（请管理员在管理页输入密钥）");
         }
@@ -78,7 +78,8 @@ public class OpenAiCompatLlmClient implements LlmClient {
             user.put("content", userText);
         }
 
-        log.debug("调用大模型: model={}, hasImage={}", conf.model(), imageUrl != null && !imageUrl.isBlank());
+        log.debug("调用大模型: tier={}, model={}, hasImage={}",
+                paid ? "paid" : "free", conf.model(), imageUrl != null && !imageUrl.isBlank());
         JsonNode response = restClient(conf).post()
                 .uri("/chat/completions")
                 .contentType(MediaType.APPLICATION_JSON)

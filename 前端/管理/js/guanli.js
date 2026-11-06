@@ -1,7 +1,8 @@
 /* ============================================================
  * guanli.js —— 管理中心逻辑（仅管理员）
- *  1) 爬虫控制：启动按钮 + 最近一轮统计（解析/写入/沿用上一真实价/暂无数据）；
- *  2) AI 对话端 API：输入密钥即可完成接入（baseUrl/model 可选）；
+ *  1) 爬虫控制：单轮"启动爬虫" + 定时抓取（每日 08/12/18/22 点，服务器常驻）
+ *     开启/停止 + 最近一轮统计（解析/写入/沿用上一真实价/暂无数据）；
+ *  2) AI 对话端 API：免费账户与付费账户两档分开配置（密钥/接口地址/模型名各自独立，保存即时生效）；
  *  3) 用户管理：列表 / 改角色 / 重置密码 / 删除。
  * ============================================================ */
 (function () {
@@ -42,6 +43,7 @@
     $('crawlerState').textContent = data.running
       ? '⏳ 爬虫运行中，请稍候…' : '● 空闲';
     $('crawlerState').style.color = data.running ? '#b45309' : '#16a34a';
+    renderScheduleStatus(data);
     var st = data.lastRound || {};
     if (st.time && st.time !== '暂无抓取统计') {
       $('stTime').textContent = String(st.time).slice(5, 16);
@@ -55,6 +57,19 @@
     } else {
       $('stTime').textContent = '暂无';
     }
+  }
+
+  /* 定时抓取（每日 08/12/18/22 点，服务器长期运行）状态与按钮切换 */
+  function renderScheduleStatus(data) {
+    var on = !!data.scheduleRunning;
+    var startBtn = $('crawlerScheduleBtn');
+    var stopBtn = $('crawlerScheduleStopBtn');
+    var state = $('crawlerScheduleState');
+    if (!startBtn || !stopBtn || !state) return;
+    state.textContent = on ? '⏳ 定时抓取运行中（每日 08/12/18/22 点）' : '● 定时抓取未开启';
+    state.style.color = on ? '#0e7490' : '#8a8f98';
+    startBtn.style.display = on ? 'none' : '';
+    stopBtn.style.display = on ? '' : 'none';
   }
 
   function refreshCrawler() {
@@ -80,37 +95,73 @@
         }, 5000);
       });
     };
+
+    var schBtn = $('crawlerScheduleBtn');
+    var schStopBtn = $('crawlerScheduleStopBtn');
+    if (schBtn) {
+      schBtn.onclick = function () {
+        schBtn.disabled = true;
+        apiCall(window.api.crawlerScheduleStart(), '开启定时抓取失败').then(function (data) {
+          if (data) UI.toast(data.message || '定时抓取已开启');
+          refreshCrawler();
+          setTimeout(function () { schBtn.disabled = false; }, 3000);
+        });
+      };
+    }
+    if (schStopBtn) {
+      schStopBtn.onclick = function () {
+        if (!confirm('确认停止定时抓取？停止后每日 08/12/18/22 点不再自动抓取，可随时重新开启。')) return;
+        schStopBtn.disabled = true;
+        apiCall(window.api.crawlerScheduleStop(), '停止定时抓取失败').then(function (data) {
+          if (data) UI.toast(data.message || '定时抓取已停止');
+          refreshCrawler();
+          setTimeout(function () { schStopBtn.disabled = false; }, 3000);
+        });
+      };
+    }
   }
 
-  /* ---------- AI API 配置 ---------- */
+  /* ---------- AI API 配置（免费 / 付费两档分开管理） ---------- */
+  var AI_TIERS = [
+    { tier: 'free', cap: 'Free', label: '免费' },
+    { tier: 'paid', cap: 'Paid', label: '付费' },
+  ];
+
   function bindAi() {
     apiCall(window.api.aiConfig(), '读取 AI 配置失败').then(function (data) {
       if (!data) return;
-      $('aiBase').value = data.baseUrl || '';
-      $('aiModel').value = data.model || '';
-      $('aiKeyHint').textContent = data.configured
-        ? '当前：已配置（' + data.apiKeyMasked + '），保存新密钥可覆盖'
-        : '当前：未配置（使用本地演示模型）';
-    });
-    $('aiSaveBtn').onclick = function () {
-      var key = $('aiKey').value.trim();
-      var base = $('aiBase').value.trim();
-      var model = $('aiModel').value.trim();
-      // 无默认地址：填密钥时必须同时填接口地址与模型名（与后端校验一致）
-      if (key && !base) { UI.toast('填写密钥时必须填写接口地址（无默认地址）', 'err'); return; }
-      if (key && !model) { UI.toast('填写密钥时必须填写模型名（无默认模型）', 'err'); return; }
-      var btn = $('aiSaveBtn');
-      btn.disabled = true;
-      apiCall(window.api.saveAiConfig({
-        apiKey: key, baseUrl: base, model: model,
-      }), '保存失败').then(function (data) {
-        if (data) {
-          UI.toast(key ? '已保存，AI 对话即刻走云端大模型' : '已清空密钥，AI 对话回落本地演示模型');
-          $('aiKey').value = '';
-        }
-        btn.disabled = false;
+      AI_TIERS.forEach(function (t) {
+        var cfg = (data[t.tier] || {});
+        $('ai' + t.cap + 'Base').value = cfg.baseUrl || '';
+        $('ai' + t.cap + 'Model').value = cfg.model || '';
+        $('ai' + t.cap + 'Hint').textContent = cfg.configured
+          ? '当前：已配置（' + cfg.apiKeyMasked + '），保存新密钥可覆盖'
+          : '当前：未配置（使用本地演示模型）';
       });
-    };
+    });
+    AI_TIERS.forEach(function (t) {
+      $('ai' + t.cap + 'SaveBtn').onclick = function () {
+        var key = $('ai' + t.cap + 'Key').value.trim();
+        var base = $('ai' + t.cap + 'Base').value.trim();
+        var model = $('ai' + t.cap + 'Model').value.trim();
+        // 无默认地址：填密钥时必须同时填接口地址与模型名（与后端校验一致）
+        if (key && !base) { UI.toast('填写密钥时必须填写接口地址（无默认地址）', 'err'); return; }
+        if (key && !model) { UI.toast('填写密钥时必须填写模型名（无默认模型）', 'err'); return; }
+        var btn = $('ai' + t.cap + 'SaveBtn');
+        btn.disabled = true;
+        apiCall(window.api.saveAiConfig({
+          tier: t.tier, apiKey: key, baseUrl: base, model: model,
+        }), '保存失败').then(function (data) {
+          if (data) {
+            UI.toast(key
+              ? '已保存，' + t.label + '账户 AI 即刻走云端大模型'
+              : '已清空密钥，' + t.label + '账户 AI 回落本地演示模型');
+            $('ai' + t.cap + 'Key').value = '';
+          }
+          btn.disabled = false;
+        });
+      };
+    });
   }
 
   /* ---------- 用户管理 ---------- */

@@ -20,4 +20,7 @@ public class AiChatVO {
     /** 剩余额度（日 / 月） */
     private long dayRemain;
     private long monthRemain;
+
+    /** 每日不限（quota_day=0 的付费方案）：前端只展示月额度 */
+    private boolean dayUnlimited;
 }

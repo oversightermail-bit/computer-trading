@@ -16,7 +16,9 @@ import java.time.LocalDateTime;
 /**
  * 启动初始化（幂等）：
  * <ul>
- *   <li>根管理员 Controler（密码 comtoapi，角色 ADMIN）不存在则创建，角色不对则修复；</li>
+ *   <li>根管理员 Controler：密码由环境变量 ADMIN_INIT_PASSWORD 注入
+ *       （本地见项目根目录 backend-env.bat，已 gitignore 不入库）；
+ *       未配置时跳过初始化，绝不使用默认口令；</li>
  *   <li>演示账号 demo（密码 demo123，角色 USER）不存在则创建，并补免费级订阅。
  *       demo 登录后前端自动切换 Mock 演示模式，注册用户始终走真实模式。</li>
  * </ul>
@@ -29,10 +31,17 @@ public class DataInitializer implements CommandLineRunner {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final SubscriptionService subscriptionService;
+    private final AppProperties properties;
 
     @Override
     public void run(String... args) {
-        ensureUser(UserService.ROOT_ADMIN, "comtoapi", "ADMIN");
+        String adminPassword = properties.getSecurity().getAdminInitPassword();
+        if (adminPassword == null || adminPassword.isBlank()) {
+            log.warn("未配置 ADMIN_INIT_PASSWORD（app.security.admin-init-password），"
+                    + "跳过根管理员 Controler 初始化；本地请检查项目根目录 backend-env.bat");
+        } else {
+            ensureUser(UserService.ROOT_ADMIN, adminPassword, "ADMIN");
+        }
         ensureUser("demo", "demo123", "USER");
     }
 

@@ -23,6 +23,9 @@ public enum ErrorCode {
     /** AI 额度用尽 -> HTTP 429（前端据此弹出订阅升级弹窗） */
     QUOTA_EXCEEDED(42901, "AI额度已用完，升级订阅可解锁更多次数"),
 
+    /** 操作过于频繁（登录/注册限流）-> HTTP 429 */
+    TOO_MANY_REQUESTS(42902, "操作过于频繁，请稍后再试"),
+
     /** AI 上游调用失败（额度已返还） -> HTTP 502 */
     AI_UPSTREAM_FAIL(50201, "AI 服务暂时不可用，本次额度已返还，请稍后再试"),
 

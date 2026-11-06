@@ -3,33 +3,43 @@ package com.hwprice.service;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.hwprice.config.AppProperties;
 import com.hwprice.entity.SubscriptionPlan;
+import com.hwprice.entity.User;
 import com.hwprice.entity.UserSubscription;
+import com.hwprice.mapper.UserMapper;
 import com.hwprice.mapper.UserSubscriptionMapper;
 import com.hwprice.quota.QuotaContext;
 import com.hwprice.vo.SubscriptionVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 用户订阅服务：
  * <ul>
  *   <li>注册默认免费级；付费等级由"下单（比赛模式跳过支付）"直接激活并写入有效期；</li>
  *   <li>订阅记录保存等级快照（套餐名/日额度/月额度/多模态），到期由定时任务回落免费级；</li>
- *   <li>数据库额度计数器 day_used/month_used 随订阅记录一并维护。</li>
+ *   <li>数据库额度计数器 day_used/month_used 随订阅记录一并维护；</li>
+ *   <li>演示账号 demo 与根管理员 Controler **到期豁免**：订阅的付费方案到期时间恒为空
+ *       （长期有效），到期检查永不命中，保持当前方案不动。</li>
  * </ul>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class SubscriptionService {
+public class SubscriptionService implements InitializingBean {
+
+    /** 到期豁免账号：demo 演示账号 + 根管理员 Controler（保持当前方案不动） */
+    private static final List<String> EXEMPT_USERNAMES = List.of("demo", UserService.ROOT_ADMIN);
 
     private final UserSubscriptionMapper subscriptionMapper;
     private final PlanService planService;
     private final AppProperties properties;
+    private final UserMapper userMapper;
 
     /** 当前生效订阅（含等级快照）；无订阅记录时自动补一条免费级 */
     public QuotaContext current(Long userId) {
@@ -54,15 +64,48 @@ public class SubscriptionService {
     public SubscriptionVO subscribe(Long userId, Long planId) {
         SubscriptionPlan plan = planService.getActive(planId);
         boolean isFree = plan.getPriceMonth() != null && plan.getPriceMonth().signum() == 0;
+        // 演示账号/根管理员到期豁免：付费方案也长期有效
+        boolean permanent = isFree || exemptFromExpiry(userId);
         // 关闭当前生效订阅
         subscriptionMapper.update(null, new LambdaUpdateWrapper<UserSubscription>()
                 .eq(UserSubscription::getUserId, userId)
                 .eq(UserSubscription::getStatus, 1)
                 .set(UserSubscription::getStatus, 0)
                 .set(UserSubscription::getExpireTime, LocalDateTime.now()));
-        UserSubscription sub = createSubscription(userId, plan, isFree);
-        log.info("用户 {} 订阅套餐 [{}]，比赛模式跳过支付：{}", userId, plan.getPlanName(), properties.getSubscribe().isSkipPayment());
+        UserSubscription sub = createSubscription(userId, plan, permanent);
+        log.info("用户 {} 订阅套餐 [{}]，比赛模式跳过支付：{}{}", userId, plan.getPlanName(),
+                properties.getSubscribe().isSkipPayment(), permanent && !isFree ? "（到期豁免：长期有效）" : "");
         return toVO(toContext(sub));
+    }
+
+    /** 演示账号 demo 与根管理员 Controler 到期豁免：到期检查与到期时间永不命中，保持当前方案不动 */
+    private boolean exemptFromExpiry(Long userId) {
+        if (userId == null) {
+            return false;
+        }
+        User user = userMapper.selectById(userId);
+        return user != null && EXEMPT_USERNAMES.contains(user.getUsername());
+    }
+
+    /**
+     * 启动时把豁免账号**已生效**订阅的到期时间清空为长期有效（一次性数据修复，幂等）。
+     * 之后这些账号新订阅的付费方案本就无到期时间（subscribe 里 permanent=true）。
+     */
+    @Override
+    public void afterPropertiesSet() {
+        try {
+            int rows = subscriptionMapper.update(null, new LambdaUpdateWrapper<UserSubscription>()
+                    .eq(UserSubscription::getStatus, 1)
+                    .isNotNull(UserSubscription::getExpireTime)
+                    .inSql(UserSubscription::getUserId,
+                            "SELECT id FROM t_user WHERE username IN ('demo', '" + UserService.ROOT_ADMIN + "')")
+                    .set(UserSubscription::getExpireTime, null));
+            if (rows > 0) {
+                log.info("到期豁免生效：演示账号/根管理员 {} 条已生效订阅改为长期有效", rows);
+            }
+        } catch (Exception e) {
+            log.warn("到期豁免数据修复跳过：{}", e.getMessage());
+        }
     }
 
     /**

@@ -10,6 +10,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import pymysql
+from dbconn import password
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -46,7 +47,7 @@ FACTOR = 0.99
 DAYS = 30
 
 conn = pymysql.connect(host="127.0.0.1", port=3306, user="root",
-                       password="123456", database="hw_price",
+                       password=password(), database="hw_price",
                        charset="utf8mb4", autocommit=True)
 cur = conn.cursor()
 cur.execute("DELETE FROM t_price_history")

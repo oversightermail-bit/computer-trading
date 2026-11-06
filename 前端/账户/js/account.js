@@ -31,6 +31,8 @@
       var price = '';
       if (sr.code === 0 && sr.data.expireTime) {
         price = '有效期至 ' + UI.fmtTime(sr.data.expireTime);
+      } else if (sr.code === 0 && q.plan && q.plan.indexOf('免费') < 0) {
+        price = '长期有效';
       } else {
         price = '免费版 · 长期有效';
       }
@@ -38,7 +40,7 @@
         '<div class="sub-plan-name">' + UI.esc(q.plan) + '</div>' +
         '<div class="sub-plan-price">' + UI.esc(price) + '</div>' +
         '<div class="sub-detail">' +
-        '  <span>日额度 <b>' + q.dayTotal + ' 次/日</b></span>' +
+        '  <span>日额度 <b>' + (q.dayTotal > 0 ? q.dayTotal + ' 次/日' : '每日不限') + '</b></span>' +
         '  <span>月额度 <b>' + q.monthTotal + ' 次/月</b></span>' +
         '  <span>图片问答 <b>' + (q.multimodal ? '支持（计 2 次/问）' : '不支持，升级解锁') + '</b></span>' +
         '</div>';
@@ -51,19 +53,23 @@
   }
 
   function renderQuotaBlocks(q) {
-    var dayPct = q.dayTotal > 0 ? Math.round(q.dayUsed / q.dayTotal * 100) : 0;
+    var html = '';
+    // 每日不限（付费方案只限每月）：只显示月额度块
+    if (q.dayTotal > 0) {
+      var dayPct = Math.round(q.dayUsed / q.dayTotal * 100);
+      html += '<div class="quota-block">' +
+        '  <div class="qb-head"><span>今日额度</span><b>' + q.dayUsed + ' / ' + q.dayTotal + ' 次（剩 ' + q.dayRemain + '）</b></div>' +
+        '  <div class="progress"><i class="' + (dayPct >= 80 ? 'warn' : '') + '" style="width:' + dayPct + '%"></i></div>' +
+        '  <div class="qb-note">每日 0 点自动重置</div>' +
+        '</div>';
+    }
     var monPct = q.monthTotal > 0 ? Math.round(q.monthUsed / q.monthTotal * 100) : 0;
-    document.getElementById('quotaBlocks').innerHTML =
-      '<div class="quota-block">' +
-      '  <div class="qb-head"><span>今日额度</span><b>' + q.dayUsed + ' / ' + q.dayTotal + ' 次（剩 ' + q.dayRemain + '）</b></div>' +
-      '  <div class="progress"><i class="' + (dayPct >= 80 ? 'warn' : '') + '" style="width:' + dayPct + '%"></i></div>' +
-      '  <div class="qb-note">每日 0 点自动重置</div>' +
-      '</div>' +
-      '<div class="quota-block">' +
+    html += '<div class="quota-block">' +
       '  <div class="qb-head"><span>本月额度</span><b>' + q.monthUsed + ' / ' + q.monthTotal + ' 次（剩 ' + q.monthRemain + '）</b></div>' +
       '  <div class="progress"><i class="' + (monPct >= 80 ? 'warn' : '') + '" style="width:' + monPct + '%"></i></div>' +
       '  <div class="qb-note">每月 1 日自动重置</div>' +
       '</div>';
+    document.getElementById('quotaBlocks').innerHTML = html;
   }
 
   async function loadPlans() {
@@ -79,18 +85,18 @@
     grid.querySelectorAll('[data-plan]').forEach(function (btn) {
       btn.onclick = function () {
         var planId = +btn.getAttribute('data-plan');
-        var label = btn.textContent;
-        btn.disabled = true; btn.textContent = '开通中…';
-        api.subscribe(planId).then(function (r) {
-          if (r.code === 0) {
+        var plan = null;
+        res.data.forEach(function (p) { if (Number(p.id) === planId) plan = p; });
+        // 订阅按钮监视器：真实账户弹付款码（开发中），demo/根管理员模拟支付直接开通
+        SubscriptionFlow.subscribe(planId, btn, function (r) {
+          if (r && r.code === 0) {
             UI.toast('已切换为「' + r.data.planName + '」');
             loadQuotaAndSub().then(loadPlans);
             refreshQuotaChip();
-          } else {
-            btn.disabled = false; btn.textContent = label;
+          } else if (r) {
             UI.toast(r.message || '操作失败', 'err');
           }
-        });
+        }, plan ? { planName: plan.planName, amount: plan.priceMonth } : null);
       };
     });
   }
@@ -137,6 +143,11 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     if (!guard()) return;
+    // "比赛演示模式：订阅即激活，跳过支付环节"仅 demo 演示账号可见
+    if (Auth.user() === 'demo') {
+      var demoSub = document.getElementById('planDemoSub');
+      if (demoSub) demoSub.style.display = '';
+    }
     loadQuotaAndSub().then(function () {
       loadPlans();
       loadLogs();

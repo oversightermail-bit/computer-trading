@@ -22,8 +22,9 @@ spring:
     # createDatabaseIfNotExist=true：数据库不存在时自动创建
     # 注意：characterEncoding 须为 Java 字符集名（utf8），Connector/J 会自动使用 utf8mb4 连接
     url: jdbc:mysql://localhost:3306/hw_price?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: "123456"
+    # 数据库账号走最小权限：环境变量 DB_USER / DB_PASSWORD 注入（本地由 backend-env.bat 提供 hwapp 账号）
+    username: "${DB_USER:root}"
+    password: "${DB_PASSWORD}"
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -55,9 +56,15 @@ mybatis-plus:
 
 # 应用自定义配置
 app:
+  security:
+    # 根管理员 Controler 初始密码：环境变量 ADMIN_INIT_PASSWORD 注入（本地见 backend-env.bat，不入库）；为空则跳过初始化
+    admin-init-password: "${ADMIN_INIT_PASSWORD:}"
+    # CORS 允许来源（逗号分隔）：空 = 开发期全放行（file:// 演示需要）；部署时设置如 https://your.domain
+    cors-allowed-origins: "${CORS_ALLOWED_ORIGINS:}"
   jwt:
-    # HS256 签名密钥，生产环境务必替换为随机长字符串（>= 32 字节）
-    secret: "hw-price-dev-secret-please-change-me-0123456789abcdef"
+    # HS256 签名密钥（>= 32 字节）：通过环境变量 JWT_SECRET 注入
+    # （本地由项目根目录 backend-env.bat 提供，已 gitignore 不入库）
+    secret: "${JWT_SECRET}"
     # token 有效期（小时）
     expire-hours: 168
   ai:
@@ -72,6 +79,8 @@ app:
     # 管理页"启动爬虫"按钮：工作目录 + 命令（只写真实采集价，采不到显示暂无数据）
     work-dir: "../爬虫"
     command: "python run.py once --mode real"
+    # 管理页"开启定时抓取"按钮（服务器长期运行用）：常驻调度进程，每日 08/12/18/22 点各抓一轮
+    schedule-command: "python run.py schedule --mode real"
   cache:
     # 价格折线数据在 Redis 中的缓存时间（分钟）
     price-ttl-minutes: 5
@@ -79,8 +88,11 @@ app:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+    # 部署时设置环境变量 SWAGGER_ENABLED=false 关闭接口文档
+    enabled: ${SWAGGER_ENABLED:true}
   api-docs:
     path: /v3/api-docs
+    enabled: ${SWAGGER_ENABLED:true}
 
 logging:
   level:

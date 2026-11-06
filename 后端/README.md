@@ -117,14 +117,17 @@ mvn spring-boot:run
 1. 默认 `API_MODE='real'`：全部用户（含游客）走真实后端，`API_BASE` 默认 `http://127.0.0.1:8080/api`（后端已全放行 CORS）；
 2. 内置演示账号 `demo`（后端同样存在，登录校验一致）登录成功后自动切换 `mock` 模式（本地演示数据），顶栏显示"演示模式"徽章；退出登录自动切回 `real`；
 3. 注册用户一律走真实后端，不进入 mock 模式；演示账号不在任何页面展示；
-4. 内置管理员 `Controler`（密码 `comtoapi`，启动时幂等创建），顶栏出现"管理"入口：启动爬虫、AI 密钥配置、用户删改。
+4. 内置管理员 `Controler`（密码由环境变量 `ADMIN_INIT_PASSWORD` 注入，本地见项目根目录 `backend-env.bat`，不入库；启动时幂等创建），顶栏出现"管理"入口：启动爬虫、AI 密钥配置、用户删改。
 
 ## 八、配置速查（application.yml / application-subscription.yml）
 
 | 配置 | 默认 | 说明 |
 |---|---|---|
-| spring.datasource.username/password | root/123456 | **改成你本机 MySQL 账号** |
-| app.jwt.secret | dev 默认值 | 生产必须换 >= 32 字节随机串 |
+| spring.datasource.username/password | `${DB_USER:root}` / 环境变量 `DB_PASSWORD` | 部署建议用最小权限账号 hwapp（仅 hw_price 库增删改查）；本地由 `backend-env.bat`（gitignore）注入 |
+| app.jwt.secret | 环境变量 `JWT_SECRET` | 不入库：本地由 `backend-env.bat` 注入（>= 32 字节随机串） |
+| app.security.admin-init-password | 环境变量 `ADMIN_INIT_PASSWORD` | 根管理员初始密码，为空则跳过初始化 |
+| app.security.cors-allowed-origins | 环境变量 `CORS_ALLOWED_ORIGINS`（逗号分隔） | 空 = 开发期全放行；部署时按白名单收紧 |
+| SWAGGER_ENABLED | true | 部署时设 false 关闭 Swagger/OpenAPI 文档 |
 | app.ai.compress-max-chars / timeout-seconds | 500 / 30 | 回答压缩长度与调用超时 |
 | app.crawler.work-dir | ../爬虫 | 管理页"启动爬虫"的工作目录 |
 | app.crawler.command | python run.py once --mode real | 启动爬虫命令（只写真实采集价） |

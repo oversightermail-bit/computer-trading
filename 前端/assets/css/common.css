@@ -78,9 +78,10 @@ img, svg { display: block; }
 }
 .header-inner { display: flex; align-items: center; gap: 28px; height: 100%; }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand svg { width: 30px; height: 30px; }
+.brand img, .brand svg { width: 30px; height: 30px; flex: none; }
 .brand-name {
   font-size: 19px; font-weight: 700; letter-spacing: .5px;
+  white-space: nowrap;
   background: linear-gradient(90deg, var(--green-hi), var(--teal));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
@@ -406,6 +407,25 @@ table.data td strong { color: var(--text); }
 .plan-feats span { background: var(--teal-dim); padding: 2px 8px; border-radius: 6px; }
 .plan-foot { margin-top: auto; }
 .plan-foot .btn { width: 100%; }
+.plan-free-note {
+  display: flex; align-items: center; justify-content: center;
+  padding: 8px 0; font-size: 12.5px; color: var(--text-3);
+  border: 1px dashed var(--line); border-radius: 8px;
+}
+
+/* 订阅支付弹窗（付款码占位 + 功能开发中） */
+.pay-modal { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 8px 0 4px; }
+.pay-qr-box {
+  width: 190px; height: 190px; border: 1px dashed var(--line-2, #cbd5e1);
+  border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-2, #f6f7f9); color: var(--text-3); font-size: 13px;
+}
+.pay-qr-text { font-size: 11px; word-break: break-all; padding: 10px; text-align: center; }
+.pay-dev {
+  color: #b45309; background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+}
+.pay-info { font-size: 13px; color: var(--text-2); }
 
 @media (max-width: 640px) {
   .plan-grid { grid-template-columns: 1fr; }

@@ -55,9 +55,27 @@ CREATE TABLE IF NOT EXISTS t_ai_quota_log (
     KEY idx_session (session_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI 额度消耗流水';
 
+-- ---------- 订阅支付单（支付模块：模拟支付 + 可切换真实接口） ----------
+CREATE TABLE IF NOT EXISTS t_pay_order (
+    id          BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
+    order_no    VARCHAR(40)   NOT NULL COMMENT '业务订单号',
+    user_id     BIGINT        NOT NULL COMMENT '下单用户',
+    plan_id     BIGINT        NOT NULL COMMENT '套餐 id',
+    plan_name   VARCHAR(50)   NOT NULL COMMENT '套餐名快照',
+    amount      DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '应付金额（元）',
+    channel     VARCHAR(20)   NOT NULL DEFAULT 'mock' COMMENT '支付通道：mock/alipay/wechat',
+    status      TINYINT       NOT NULL DEFAULT 0 COMMENT '0=待支付 1=已支付 2=已关闭',
+    pay_params  TEXT          NULL COMMENT '支付参数（mock：模拟收款码内容；真实：预下单返回串）',
+    create_time DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下单时间',
+    pay_time    DATETIME      NULL COMMENT '支付时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_order_no (order_no),
+    KEY idx_user (user_id)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '订阅支付单（模拟支付 + 真实接口预留）';
+
 -- ---------- 初始化 4 个套餐（固定 id，INSERT IGNORE 可重复执行） ----------
 INSERT IGNORE INTO t_subscription_plan (id, plan_name, price_month, quota_day, quota_month, multimodal, status, description, sort_order) VALUES
-(1, '免费版', 0.00,  3,   60,   0, 1, '全部价格与折线浏览；仅文本问答；无图片解析', 1),
-(2, '基础版', 9.90,  20,  400,  1, 1, '文本问答 + 配置单图片解析（图片计 2 次）；配置单保存', 2),
-(3, '专业版', 29.90, 80,  1500, 1, 1, '全部 AI 能力 + 多硬件对比 + 历史会话回溯 + 优先响应', 3),
-(4, '旗舰版', 69.90, 200, 4000, 1, 1, '长上下文 + 优先并发 + 配置清单导出（CSV）', 4);
+(1, '免费版', 0.00,  3,   15,   0, 1, '全部价格与折线浏览；仅文本问答；无图片解析', 1),
+(2, '基础版', 9.90,  0,  100,  1, 1, '文本问答 + 配置单图片解析（图片计 2 次）；配置单保存（只限每月次数）', 2),
+(3, '专业版', 29.90, 0,  300,  1, 1, '全部 AI 能力 + 多硬件对比 + 历史会话回溯 + 优先响应（只限每月次数）', 3),
+(4, '旗舰版', 69.90, 0,  600,  1, 1, '长上下文 + 优先并发 + 配置清单导出（CSV）（只限每月次数）', 4);

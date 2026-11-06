@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import pymysql
+from dbconn import password
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -23,7 +24,7 @@ print("index44 =", tuples[44][1], tuples[44][2], "| index45 =", tuples[45][1], t
       "| last =", tuples[-1][1], tuples[-1][2])
 
 conn = pymysql.connect(host="127.0.0.1", port=3306, user="root",
-                       password="123456", database="hw_price",
+                       password=password(), database="hw_price",
                        charset="utf8mb4", autocommit=True)
 cur = conn.cursor()
 

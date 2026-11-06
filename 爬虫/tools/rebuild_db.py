@@ -9,6 +9,7 @@ import sys
 from datetime import date, timedelta
 
 import pymysql
+from dbconn import password
 
 sys.path.insert(0, r"D:\AI电脑购买指导项目\后端\tools")
 sys.stdout.reconfigure(encoding="utf-8")
@@ -20,7 +21,7 @@ PLATFORM = g.PLATFORMS[0]
 FACTOR = g.PLATFORM_FACTOR[PLATFORM]
 
 conn = pymysql.connect(host="127.0.0.1", port=3306, user="root",
-                       password="123456", database="hw_price",
+                       password=password(), database="hw_price",
                        charset="utf8mb4", autocommit=True)
 cur = conn.cursor()
 

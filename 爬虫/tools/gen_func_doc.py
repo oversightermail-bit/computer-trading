@@ -346,7 +346,7 @@ bullet(doc, "保存校验：填密钥必须同时填接口地址与模型名，�
 h2(doc, "4.5 安全与账号体系")
 bullet(doc, "Spring Security + JWT 无状态认证；密码 BCrypt 加盐存储；/api/auth/admin/** "
            "要求 ROLE_ADMIN，后端服务管理接口二次校验仅根管理员 Controler；")
-bullet(doc, "内置账号启动幂等创建：根管理员 Controler（comtoapi，角色 ADMIN）、"
+bullet(doc, "内置账号启动幂等创建：根管理员 Controler（密码由环境变量 ADMIN_INIT_PASSWORD 注入、不入库，角色 ADMIN）、"
            "演示账号 demo（demo123，角色 USER），密码与角色不符时自动修复；")
 bullet(doc, "应用配置表 t_app_config 存 AI 密钥等敏感配置（管理员维护，接口回显打码）。")
 
@@ -455,7 +455,7 @@ code(doc, "# 1. 建库建表  mysql -u root -p < sql/schema.sql")
 code(doc, "# 2. 质量迁移  python 爬虫/tools/migrate_quality.py（建列/基准性能分/清模拟价）")
 code(doc, "# 3. application.yml 修改数据库密码")
 code(doc, "# 4. 启动：双击项目根目录 start-backend.bat（Linux 服务器：./start-backend.sh）")
-code(doc, "#    内置账号启动幂等创建：Controler / comtoapi（管理员）、demo / demo123（演示）")
+code(doc, "#    内置账号启动幂等创建：Controler（密码见本地 backend-env.bat 的 ADMIN_INIT_PASSWORD）、demo / demo123（演示）")
 code(doc, "# Swagger: http://localhost:8080/swagger-ui/index.html")
 h2(doc, "8.3 爬虫")
 code(doc, "cd 爬虫 && pip install -r requirements.txt")
@@ -473,7 +473,7 @@ table(doc,
       ],
       widths=[5.8, 10.6])
 h2(doc, "8.5 账号与配置速查")
-bullet(doc, "根管理员：Controler / comtoapi（管理中心全部功能；后端服务管理仅此账号可用）；")
+bullet(doc, "根管理员：Controler（密码见本地 backend-env.bat 的 ADMIN_INIT_PASSWORD；管理中心全部功能；后端服务管理仅此账号可用）；")
 bullet(doc, "演示账号：demo / demo123（不在页面展示，登录后自动进 Mock 演示模式）；")
 bullet(doc, "AI 网关：管理中心输入密钥+接口地址+模型名（无默认值），保存即时生效；"
            "未配置密钥自动用本地演示模型；")
@@ -507,7 +507,7 @@ bullet(doc, "性价比公式（2026-11-05）：性能分 ÷ 参考价 × 1000 �
 bullet(doc, "性能分基准化（2026-11-05）：人工维护改为可验证基准自动映射 1-100"
            "（PassMark CPU Mark / 3DMark Time Spy / 官方规格），新增 perf_basis"
            "（依据公式与原始数值）与 perf_updated（更新日期），单一数据源 perf_benchmarks.json；")
-bullet(doc, "管理员体系（2026-11-05）：新增根管理员 Controler（comtoapi）与管理中心页面"
+bullet(doc, "管理员体系（2026-11-05）：新增根管理员 Controler（密码由环境变量注入）与管理中心页面"
            "——启动爬虫按钮（含统计面板）、AI 对话端 API 接入（密钥/地址/模型均无默认值，"
            "保存即时生效）、用户删改（改角色/重置密码/删除，根管理员受保护）；")
 bullet(doc, "后端服务管理（2026-11-05）：新增 start/restart-backend 脚本"

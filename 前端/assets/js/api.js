@@ -353,7 +353,9 @@
         var upgradable = PLANS.filter(p => p.id > id);
         return {
           plan: plan.planName, planId: plan.id,
-          dayUsed: user.dayUsed, dayTotal: plan.quotaDay, dayRemain: Math.max(0, plan.quotaDay - user.dayUsed),
+          dayUsed: user.dayUsed, dayTotal: plan.quotaDay,
+          dayRemain: Math.max(0, plan.quotaDay - user.dayUsed),
+          dayUnlimited: plan.quotaDay <= 0,
           monthUsed: user.monthUsed, monthTotal: plan.quotaMonth, monthRemain: Math.max(0, plan.quotaMonth - user.monthUsed),
           multimodal: plan.multimodal, expireTime: null, upgradable: upgradable,
         };
@@ -428,7 +430,7 @@
           return fail(40301, '当前套餐不支持图片问答，升级基础版即可解锁', { upgradable: PLANS.filter(p => p.id > plan.id) });
         }
         var cost = hasImage ? 2 : 1;
-        if (u.dayUsed + cost > plan.quotaDay || u.monthUsed + cost > plan.quotaMonth) {
+        if ((plan.quotaDay > 0 && u.dayUsed + cost > plan.quotaDay) || u.monthUsed + cost > plan.quotaMonth) {
           return fail(42901, 'AI额度已用完，升级订阅可解锁更多次数',
             { plan: plan.planName, dayRemain: Math.max(0, plan.quotaDay - u.dayUsed), monthRemain: Math.max(0, plan.quotaMonth - u.monthUsed), upgradable: PLANS.filter(p => p.id > plan.id) });
         }
@@ -449,6 +451,7 @@
         return ok({
           answer: answer, cost: cost, sessionId: sessionId,
           dayRemain: Math.max(0, plan.quotaDay - u.dayUsed),
+          dayUnlimited: plan.quotaDay <= 0,
           monthRemain: Math.max(0, plan.quotaMonth - u.monthUsed),
         });
       },
@@ -494,12 +497,27 @@
       plans: function () { return request('/public/subscribe/plans'); },
       quota: function () { return request('/auth/quota'); },
       mySubscription: function () { return request('/auth/subscribe/me'); },
-      subscribe: function (planId) { return request('/auth/subscribe/order', { method: 'POST', body: JSON.stringify({ planId: planId }) }); },
+      subscribe: async function (planId) {
+        // 支付流程：下单 → （mock 渠道）模拟支付确认 → 激活；
+        // 真实支付渠道（alipay/wechat）接入后返回 needsPay，前端弹付款码
+        var order = await request('/auth/subscribe/order', { method: 'POST', body: JSON.stringify({ planId: planId }) });
+        if (!order || order.code !== 0) return order;
+        if (order.data && order.data.mock) {
+          return await request('/auth/subscribe/pay/mock/confirm', { method: 'POST', body: JSON.stringify({ orderNo: order.data.orderNo }) });
+        }
+        return { code: 0, message: '待支付', data: {
+          needsPay: true, orderNo: order.data.orderNo, channel: order.data.channel,
+          qrContent: order.data.qrContent, payUrl: order.data.payUrl,
+          planName: order.data.planName, amount: order.data.amount, status: order.data.status,
+        } };
+      },
       quotaLogs: function (page, size) { return request('/auth/quota/logs' + q({ page: page || 1, size: size || 20 })); },
       aiChat: function (payload) { return request('/auth/ai/chat', { method: 'POST', body: JSON.stringify(payload) }); },
       /* ---- 管理员接口（仅 ROLE_ADMIN 可调） ---- */
       crawlerStart: function () { return request('/auth/admin/crawler/start', { method: 'POST' }); },
       crawlerStatus: function () { return request('/auth/admin/crawler/status'); },
+      crawlerScheduleStart: function () { return request('/auth/admin/crawler/schedule/start', { method: 'POST' }); },
+      crawlerScheduleStop: function () { return request('/auth/admin/crawler/schedule/stop', { method: 'POST' }); },
       aiConfig: function () { return request('/auth/admin/ai-config'); },
       saveAiConfig: function (payload) { return request('/auth/admin/ai-config', { method: 'POST', body: JSON.stringify(payload) }); },
       adminUsers: function () { return request('/auth/admin/users'); },

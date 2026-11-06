@@ -8,10 +8,10 @@ USE hw_price;
 -- 订阅套餐（与 subscription_schema.sql 一致，INSERT IGNORE 可重复执行）
 INSERT IGNORE INTO t_subscription_plan
 (id, plan_name, price_month, quota_day, quota_month, multimodal, status, description, sort_order) VALUES
-(1, '免费版', 0.00, 3, 60, 0, 1, '全部价格与折线浏览；仅文本问答；无图片解析', 1),
-(2, '基础版', 9.90, 20, 400, 1, 1, '文本问答 + 配置单图片解析（图片计 2 次）；配置单保存', 2),
-(3, '专业版', 29.90, 80, 1500, 1, 1, '全部 AI 能力 + 多硬件对比 + 历史会话回溯 + 优先响应', 3),
-(4, '旗舰版', 69.90, 200, 4000, 1, 1, '长上下文 + 优先并发 + 配置清单导出（CSV）', 4);
+(1, '免费版', 0.00, 3, 15, 0, 1, '全部价格与折线浏览；仅文本问答；无图片解析', 1),
+(2, '基础版', 9.90, 0, 100, 1, 1, '文本问答 + 配置单图片解析（图片计 2 次）；配置单保存（只限每月次数）', 2),
+(3, '专业版', 29.90, 0, 300, 1, 1, '全部 AI 能力 + 多硬件对比 + 历史会话回溯 + 优先响应（只限每月次数）', 3),
+(4, '旗舰版', 69.90, 0, 600, 1, 1, '长上下文 + 优先并发 + 配置清单导出（CSV）（只限每月次数）', 4);
 
 -- 硬件类目与文案（固定 id 1-10）
 INSERT INTO t_hardware (id, type, name, func_desc, scene, pitfall, sort_order) VALUES

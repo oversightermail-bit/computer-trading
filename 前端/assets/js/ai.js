@@ -125,7 +125,10 @@
     try {
       var res = await api.quota();
       if (res.code === 0) {
-        el.textContent = '当前：' + res.data.plan + ' · 今日剩余 ' + res.data.dayRemain + ' 次 · 本月剩余 ' + res.data.monthRemain + ' 次';
+        el.textContent = '当前：' + res.data.plan + ' · ' +
+          (res.data.dayUnlimited
+            ? '本月剩余 ' + res.data.monthRemain + ' 次（每日不限）'
+            : '今日剩余 ' + res.data.dayRemain + ' 次 · 本月剩余 ' + res.data.monthRemain + ' 次');
       } else {
         el.textContent = '额度获取失败';
       }
@@ -167,7 +170,11 @@
     }
     if (res.code === 0) {
       typing.innerHTML = UI.renderRich(res.data.answer) +
-        '<span class="ai-cost">本次消耗 ' + res.data.cost + ' 次额度 · 今日剩余 ' + res.data.dayRemain + ' 次</span>';
+        '<span class="ai-cost">本次消耗 ' + res.data.cost + ' 次额度 · ' +
+        (res.data.dayUnlimited
+          ? '本月剩余 ' + res.data.monthRemain + ' 次'
+          : '今日剩余 ' + res.data.dayRemain + ' 次') +
+        '</span>';
       refreshQuotaLine();
       if (typeof window.refreshQuotaChip === 'function') window.refreshQuotaChip();
     } else if (QuotaKit.handleAuthError(res)) {

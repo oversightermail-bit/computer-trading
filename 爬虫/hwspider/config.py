@@ -17,18 +17,33 @@
   - hardware_type 编码与 t_hardware.type 一致。
 """
 from pathlib import Path
+import os
 
 # ---------------- 项目路径 ----------------
 BASE_DIR = Path(__file__).resolve().parent.parent     # 爬虫/
 LOG_DIR = BASE_DIR / "logs"
 REPORT_DIR = LOG_DIR                                   # 推荐报告/统计/告警统一放 logs/
 
+
+def _db_password() -> str:
+    """数据库密码不入 Git：环境变量 HW_DB_PASSWORD 优先，其次 爬虫/.dbsecret（已 gitignore）。"""
+    v = os.environ.get("HW_DB_PASSWORD")
+    if v:
+        return v
+    secret_file = BASE_DIR / ".dbsecret"
+    if secret_file.exists():
+        return secret_file.read_text(encoding="utf-8").strip()
+    return ""
+
+
 # ---------------- 数据库（与后端 application.yml 保持一致） ----------------
+# 部署建议：设置 HW_DB_USER / HW_DB_PASSWORD 走最小权限账号 hwapp；
+# 本地未设置时回退 root + 爬虫/.dbsecret（维护用途，具备全库权限）。
 DATABASE = {
     "host": "127.0.0.1",
     "port": 3306,
-    "user": "root",
-    "password": "123456",
+    "user": os.environ.get("HW_DB_USER", "root"),
+    "password": _db_password(),
     "database": "hw_price",
     "charset": "utf8mb4",
 }

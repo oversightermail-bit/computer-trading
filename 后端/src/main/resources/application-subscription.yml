@@ -15,3 +15,17 @@ app:
     skip-payment: true
     # 订阅到期检查（自动回落免费级）cron 表达式：每小时整点执行
     expire-check-cron: "0 0 * * * ?"
+    # 支付模块：模拟支付 + 可切换真实接口（营业执照办理后把 channel 改成 alipay/wechat 即切换）
+    payment:
+      channel: mock
+      # 支付宝参数占位（办理营业执照后填写）
+      alipay-app-id: ""
+      alipay-notify-url: ""
+      alipay-return-url: ""
+      alipay-public-key: ""
+      app-private-key: ""
+      # 微信支付参数占位（办理营业执照后填写）
+      wechat-app-id: ""
+      wechat-mch-id: ""
+      wechat-notify-url: ""
+      wechat-api-key: ""
