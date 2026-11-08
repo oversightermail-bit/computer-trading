@@ -25,7 +25,10 @@ pandas（清洗归一）+ PyMySQL（入库）+ APScheduler（定时）**。
 ├── logs/                       # 运行日志 / 统计 / 推荐报告 / 告警（运行时生成）
 ├── tools/
 │   ├── verify_e2e.py           # 端到端验证（临时库导入/幂等断言，不动真实库）
-│   └── test_parsers.py         # 平台解析与清洗单元测试（合成样本，不走网络）
+│   ├── test_parsers.py         # 平台解析与清洗单元测试（合成样本，不走网络）
+│   ├── migrate_quality.py      # 一次性迁移（建列 / 基准性能分 / 清空模拟价）
+│   ├── probe_zol_*.py          # ZOL 页面改版探针（复测并更新 zol.py 选择器）
+│   └── ...                     # 其余为一次性维护 / 探测脚本
 └── hwspider/
     ├── config.py               # 统一配置中心：数据库/平台/反爬/调度/阈值/商品目录
     ├── items.py                # RawItem 原始条目模型（SKU=品牌|型号|规格）
@@ -34,7 +37,7 @@ pandas（清洗归一）+ PyMySQL（入库）+ APScheduler（定时）**。
     ├── cleaner.py              # pandas 清洗：价格标准化、异常剔除、中位价聚合
     ├── storage.py              # 入库：mysql / sql / jsonl 三种 sink，幂等 upsert
     ├── recommend.py            # 推荐购买平台算法（最低价 + 价差阈值并列）
-    ├── mockmarket.py           # 模拟行情数据源（封禁/离线自动降级）
+    ├── mockmarket.py           # 模拟行情数据源（仅 --mode mock 与 backfill 演示使用，不自动降级）
     ├── monitor.py              # 成功率统计、封禁检测、告警（文件 + 可选 webhook）
     ├── engine.py               # 单轮编排：调度→采集→清洗→入库→推荐→监控
     ├── scheduler.py            # 定时调度（APScheduler，缺省降级内置循环）
@@ -61,8 +64,8 @@ python run.py init
 # 3. 回填最近 30 天时序（幂等，已有日期自动跳过）
 python run.py backfill --days 30
 
-# 4. 单轮采集（默认 auto：真实抓取，被封禁/失败自动切换模拟行情）
-python run.py once
+# 4. 单轮采集（默认 real：只走真实抓取，失败/封禁不降级，采不到显示"暂无数据"）
+python run.py once --mode real
 
 # 5. 启动每日定时调度（08:00 / 12:00 / 18:00 / 22:00）
 python run.py schedule

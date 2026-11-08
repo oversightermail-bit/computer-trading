@@ -22,7 +22,7 @@
     var PLATFORMS = HW ? HW.platforms : ['中关村在线'];
     var DAYS = HW ? HW.days : 30;
     // 性能分随 HW_DATA.products[].perf 而来（与后端 t_product.perf_score 同源，
-    // 用于高性价比推荐：指数 = 性能分 ÷ 价格 × 1000）
+    // 用于高性价比推荐：性价比指数 = 性能分 ÷ ln(参考价) × 100（对数归一化，抑制"越便宜分越高"偏差）
 
     function delay(ms) { return UI.sleep(ms || 160 + Math.random() * 180); }
     function ok(data) { return { code: 0, message: 'ok', data: data }; }

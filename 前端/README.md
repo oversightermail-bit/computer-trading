@@ -4,23 +4,23 @@
 
 ## 一、快速开始
 
-**方式 A：直接双击运行（Mock 模式，比赛演示推荐）**
+**方式 A：双击运行 + 演示账号（比赛演示推荐）**
 
-直接双击 `首页/shouye.html`（或本目录 `index.html`）即可。无需任何服务器、无需联网：数据、图表、登录、订阅、AI 问答全部本地模拟。
+直接双击 `首页/shouye.html`（或本目录 `index.html`）打开。页面默认连接真实后端（`http://127.0.0.1:8080/api`）；按根目录 README 启动后端后，用演示账号 `demo` / `demo123` 登录，页面自动切换为 Mock 演示模式（数据、图表、登录、订阅、AI 问答全部本地模拟，此后离线也可完整演示）。纯零安装体验可直接访问在线静态演示：<https://oversightermail-bit.github.io/web-display/>。
 
 **方式 B：本地静态服务器**
 
 ```bash
 cd 前端
-python -m http.server 8080      # 或 npx serve / VS Code Live Server
+python -m http.server 8000      # 或 npx serve / VS Code Live Server（避开后端占用的 8080）
 ```
 
-访问 `http://localhost:8080/首页/shouye.html`。
+访问 `http://localhost:8000/首页/shouye.html`。
 
-> 演示账号：用户名 `demo`，密码 `demo123`（免费版 · 3 次/日 AI 问答）。
-> 推荐演示闭环：登录 → 账户页查看套餐 → 订阅升级 → AI 问答 → 额度扣减 → 额度用完弹升级窗 → 升级套餐。
+> 演示账号：用户名 `demo`，密码 `demo123`（初始为免费版 · 3 次/日 AI 问答，可在账户页任意切换 4 档套餐）。
+> 推荐演示闭环：登录 → 账户页查看套餐与额度 → 使用免费额度进行 AI 问答 → 额度用尽自动弹出订阅升级窗 → 订阅升级即时生效 → 继续 AI 问答 → 账户页查看额度消耗明细。
 
-## 二、页面清单（13 页）
+## 二、页面清单（14 页）
 
 | 页面 | 文件 | 说明 |
 |---|---|---|
@@ -28,6 +28,7 @@ python -m http.server 8080      # 或 npx serve / VS Code Live Server
 | 价格波动页 ×10 | 各硬件文件夹 | 功能作用 / 适用场景 / 易踩坑点 + 多型号折线图（图例显隐）+ 高性价比推荐 + 返回首页 |
 | 登录 / 注册 | `登录界面/denlu.html` | 游客浏览；登录后解锁 AI 咨询 |
 | 我的账户 | `账户/gerenxingxi.html` | 当前订阅、日/月额度进度、套餐订阅、额度消耗明细 |
+| 管理中心 | `管理/guanli.html` | 仅管理员：爬虫启动与定时抓取、AI 网关免费/付费分档配置、用户管理；后端服务管理仅根管理员 |
 
 价格波动页与后端 `t_hardware.type` 编码一一对应：
 
@@ -57,8 +58,8 @@ python -m http.server 8080      # 或 npx serve / VS Code Live Server
 │  ├─ js/ai.js                # AI 助手悬浮按钮 + 问答抽屉（文本/图片）
 │  ├─ js/price-page.js        # 10 个价格波动页共用逻辑
 │  ├─ js/ui.js                # Toast / Modal / 格式化
-│  └─ js/vendor/echarts.min.js# ECharts 5.5.1（本地化，离线可用）
-├─ 首页|CPU|GPU|台式机内存|笔记本内存|固态硬盘|移动便携固态硬盘|移动便携机械硬盘|显示屏|键盘|鼠标|登录界面|账户/
+│  └─ js/vendor/echarts.min.js # ECharts 5.5.1（本地化，离线可用）
+├─ 首页|CPU|GPU|台式机内存|笔记本内存|固态硬盘|移动便携固态硬盘|移动便携机械硬盘|显示屏|键盘|鼠标|登录界面|账户|管理/
 │   ├─ *.html                 # 页面
 │   ├─ css/ js/               # 页面专属样式与逻辑（硬件页为统一模板生成）
 │   └─ images/ pages/         # 预留
@@ -70,10 +71,12 @@ python -m http.server 8080      # 或 npx serve / VS Code Live Server
 
 ```js
 window.AppConfig = {
-  API_MODE: 'mock',   // 'mock' = 本地模拟（默认，比赛演示）
-  API_BASE: '/api',   // 'real' 模式下的后端地址前缀
+  API_MODE: 'real',                      // 默认 'real'：游客也走真实后端
+  API_BASE: 'http://127.0.0.1:8080/api', // 真实后端地址前缀
 };
 ```
+
+- 运行时切换：演示账号 `demo` 登录成功后自动 `setMode('mock')`（本地演示数据，顶栏显示「演示模式」徽章），退出登录自动切回 `'real'`；注册用户始终走真实后端；模式持久化于 localStorage（`hwprice_api_mode`），跨页面保持一致。
 
 - `mock`：`api.js` 内置的 MockApi —— 数据与 `后端/sql/init_data.sql` 完全一致（10 类硬件、58 型号、中关村在线 × 30 天价格、4 档套餐），本地 localStorage 模拟用户/登录/订阅/额度，AI 为本地规则应答（简短大白话）。
 - `real`：fetch 调用 Java 后端 REST 接口，自动携带 JWT；HTTP 401 自动跳登录页。切换后前端业务代码**零改动**。
@@ -91,6 +94,9 @@ window.AppConfig = {
 | `GET /api/public/subscribe/plans` | 游客 | 套餐列表 |
 | `GET /api/auth/quota` `GET /api/auth/quota/logs` | 登录 | 剩余额度 / 消耗明细 |
 | `POST /api/auth/subscribe/order` | 登录 | 订阅下单（比赛模式跳过支付直接激活） |
+| `GET /api/auth/subscribe/me` | 登录 | 我的订阅（套餐/有效期/等级快照） |
+
+> 完整接口清单（含支付回调与管理接口）见 `后端/README.md`。
 
 ## 五、Mock 数据再生成（可选）
 

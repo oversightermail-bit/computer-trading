@@ -27,7 +27,7 @@ backend-env.sh
 # ===== 权限恢复备份目录 =====
 acl-recovery/
 
-# ===== Office 文档（如需把 Word 文档推上 GitHub，用 git add -f 指定文件即可） =====
+# ===== Office 文档=====
 *.docx
 
 # ===== 系统文件 =====
